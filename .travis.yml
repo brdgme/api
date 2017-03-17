@@ -17,3 +17,4 @@ deploy:
   app: brdgme-web
   env: brdgme-web-prod
   zip_file: deploy
+  bucket_name:  brdgme-web-deploy
