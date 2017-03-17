@@ -7,6 +7,9 @@ before_deploy:
 - mkdir deploy/app
 - cp -r static templates deploy/app/
 - cp target/x86_64-unknown-linux-musl/release/brdgme-web deploy/app/brdgme-web
+- cd deploy
+- zip -r deploy.zip *
+- cd -
 deploy:
   provider: elasticbeanstalk
   access_key_id:
@@ -16,5 +19,5 @@ deploy:
   region: us-west-1
   app: brdgme-web
   env: brdgme-web-prod
-  zip_file: deploy
+  zip_file: deploy/deploy.zip
   bucket_name:  brdgme-web-deploy
