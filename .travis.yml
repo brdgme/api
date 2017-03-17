@@ -17,7 +17,7 @@ deploy:
     secure: tGadWyfZEZHkeN2XAYrwTrc1Rr3SkBrVr6EHEO/EMhIlqm2SpKEVxwy2ySobc7l9n8p2SeHVkZrqVIbszhTQOEsV/Lgkyb3sLrCvcDC4BBNn3FMcIwIchviUy+/xW3svpbL2i51QI3P6QKBjCXeRmnfXMPhf21jIh+f2rzfAgokjhXwrz2DDZV0qAPttTEpiDZbtzkmIpL1ZIdT+LNp/TFY1fof1cUYFljf4LDfVBGxocTUWEuYleNT0vE6RsoN3Hu8VeSrbL+SRWCU09ds1lJ4IhLqWUGqC6wrrtISTfyB4jWSErGwZnpeoRABEBIx2q1xfbiM18+RASox/Y2pCjgEwEZwv8v43Fi2JIlFmKZYRQpD0zmrdPHwxfMnplWd7zYt3Y7lzemKMCK8fSw1n6o9a4fYz1pzN3GnAqcEoR/8OBZ1l/8qkB36nUlfIFNMzTjYRP9lnCyYezKqfSw2OrybK/71BaRTm2RA3k589dqiVFeB2s6cWJ8bQaw71whh0KiNP+vhmiDI7KBzKj5gh9sAEvy19mznAVNMen6Ct6eYXICGr/ULOAFYOkdTAQrCPc629QBKgR/LKaAM30jU2EQxX1JZ9Cw5xoVGP45RusV4th+VfsOhdtrECraVNJeN1fgu7obnqzLTdN+zO9IYCjI3Gyn76ZGYFSr8FEDIrwcE=
   region: us-west-1
   app: brdgme-api
-  env: brdgme-apu-prod
+  env: brdgme-api-prod
   zip_file: deploy/deploy.zip
   bucket_name:  brdgme-api-deploy
   skip_cleanup: true
