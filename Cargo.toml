@@ -1,0 +1,8 @@
+[package]
+name = "brdgme-web"
+version = "0.1.0"
+authors = ["Michael Alexander <beefsack@gmail.com>"]
+
+[dependencies]
+rocket = "0.2.2"
+rocket_codegen = "0.2.2"
