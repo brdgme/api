@@ -1,5 +1,6 @@
 FROM amazonlinux
-ADD web web
 ENV ROCKET_ENV=prod
-ENTRYPOINT web/web
+ADD app app
+WORKDIR app
+ENTRYPOINT ./brdgme-web
 EXPOSE 80

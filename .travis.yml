@@ -1,0 +1,19 @@
+language: rust
+rust: nightly
+before_deploy:
+- curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=$TRAVIS_RUST_VERSION -y
+- ~/.cargo/bin/rustup target add x86_64-unknown-linux-musl
+- ~/.cargo/bin/cargo build --release --target=x86_64-unknown-linux-musl
+- mkdir deploy/app
+- cp -r static templates deploy/app/
+- cp target/x86_64-unknown-linux-musl/release/brdgme-web deploy/app/brdgme-web
+deploy:
+  provider: elasticbeanstalk
+  access_key_id:
+    secure: INfA75jJlKDoUwXCbV3KnYe4LMB4mvpTCjJMS3bJMqvK5+6Ci4+trex3WtxFbZ3HB+9cZnF0EDNY6PgXBEEcJV97x6oN9mK7sV0Z0DAZpehN0okso7kpKNSKpLH8y/YXAoZ2wpsM/q8SAcmPgaeeteBJDD2WFksZ2PSQ5cE1ywmpyUi1a53vmEG1dzL+ADNxdeGNXE8CPGokbLQhpUBGjA9FO4EWjKSuRyRvTK4Oi9NNGi1LeYpk2oJmXAjAEJFtJGSuPchs0myc7cX+eTDsW/esDuB0HzTGXRYD1xya6ZyDBcP00VSl7eF6DqPxBU6UaduXcE/qysfjXxUPUN79fMFSY4ACmbBr+F75UIbReG78e0QwkmEm/RQBEeMlGIhVZtq3uXnYp68EoUo951EMfU7VAou6JLp0kd/jLr+/wWpjW0a4LvK6pZPoFfqBn9UUbnX50vrbY1CB9r657asAwpnwtlsEz2ETAQtR1WWKBvy3Ch8SzA00lL+fv9yWJlXzQKs13VgHcwKK0hOPfB8IyPj0BLYeSlqa8zm6IqaCXoLCTfuqMlmKEog+Q70A0bJUn8KQ+9g2XlXz1Pi0KtynIZDeHeO1CQZZF04t2WeMjn/vuyMEZ894qwpQtR8R8bzyH878MKIsbVLqBtAEzFFSgV3cjTOrgG/AoWhUiYkEukM=
+  secret_access_key:
+    secure: tGadWyfZEZHkeN2XAYrwTrc1Rr3SkBrVr6EHEO/EMhIlqm2SpKEVxwy2ySobc7l9n8p2SeHVkZrqVIbszhTQOEsV/Lgkyb3sLrCvcDC4BBNn3FMcIwIchviUy+/xW3svpbL2i51QI3P6QKBjCXeRmnfXMPhf21jIh+f2rzfAgokjhXwrz2DDZV0qAPttTEpiDZbtzkmIpL1ZIdT+LNp/TFY1fof1cUYFljf4LDfVBGxocTUWEuYleNT0vE6RsoN3Hu8VeSrbL+SRWCU09ds1lJ4IhLqWUGqC6wrrtISTfyB4jWSErGwZnpeoRABEBIx2q1xfbiM18+RASox/Y2pCjgEwEZwv8v43Fi2JIlFmKZYRQpD0zmrdPHwxfMnplWd7zYt3Y7lzemKMCK8fSw1n6o9a4fYz1pzN3GnAqcEoR/8OBZ1l/8qkB36nUlfIFNMzTjYRP9lnCyYezKqfSw2OrybK/71BaRTm2RA3k589dqiVFeB2s6cWJ8bQaw71whh0KiNP+vhmiDI7KBzKj5gh9sAEvy19mznAVNMen6Ct6eYXICGr/ULOAFYOkdTAQrCPc629QBKgR/LKaAM30jU2EQxX1JZ9Cw5xoVGP45RusV4th+VfsOhdtrECraVNJeN1fgu7obnqzLTdN+zO9IYCjI3Gyn76ZGYFSr8FEDIrwcE=
+  region: us-west-1
+  app: brdgme-web
+  env: brdgme-web-prod
+  zip_file: deploy
