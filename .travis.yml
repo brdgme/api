@@ -21,3 +21,4 @@ deploy:
   env: brdgme-web-prod
   zip_file: deploy/deploy.zip
   bucket_name:  brdgme-web-deploy
+  skip_cleanup: true
