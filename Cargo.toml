@@ -4,5 +4,8 @@ version = "0.1.0"
 authors = ["Michael Alexander <beefsack@gmail.com>"]
 
 [dependencies]
-rocket = "0.2.2"
-rocket_codegen = "0.2.2"
+brdgme-std = { git = "https://github.com/brdgme/std.git" }
+rustless = "0.10.0"
+iron = "0.4.0"
+hyper = "0.9.18"
+valico = "1.0.1"

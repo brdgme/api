@@ -1,17 +1,32 @@
-#![feature(plugin)]
-#![plugin(rocket_codegen)]
+extern crate rustless;
+extern crate hyper;
+extern crate iron;
+extern crate valico;
 
-extern crate rocket;
+use rustless::{Application, Api, Nesting, Versioning};
+use rustless::batteries::swagger;
 
-#[get("/")]
-fn index() -> &'static str {
-   "Hello world!" 
-}
+use std::default::Default;
 
-fn rocket() -> rocket::Rocket {
-    rocket::ignite().mount("/", routes![index])
-}
+mod game;
 
 fn main() {
-    rocket().launch();
+    let api = Api::build(|api| {
+        api.prefix("api");
+        api.mount(swagger::create_api("docs"));
+        api.mount(Api::build(|v1| {
+                                 v1.version("v1", Versioning::Path);
+                                 v1.namespace("game", game::namespace);
+                             }));
+    });
+    let mut app = Application::new(api);
+    swagger::enable(&mut app,
+                    swagger::Spec {
+                        info: swagger::Info {
+                            title: "brdg.me API".to_string(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
+    iron::Iron::new(app).http("0.0.0.0:8000").unwrap();
 }
