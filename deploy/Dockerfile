@@ -1,4 +1,4 @@
-FROM amazonlinux
+FROM ubuntu:precise
 ADD app app
 WORKDIR app
 ENTRYPOINT ./brdgme-api
