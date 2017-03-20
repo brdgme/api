@@ -16,5 +16,5 @@ deploy:
   app: brdgme-api
   env: brdgme-api-prod
   zip_file: deploy/deploy.zip
-  bucket_name:  brdgme-api-deploy
+  bucket_name:  brdgme-api
   skip_cleanup: true
