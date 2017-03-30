@@ -4,12 +4,16 @@ use rustless::json::{JsonValue, ToJson};
 use rustless::backend::HandleResult;
 use rustless::Nesting;
 use valico::json_dsl;
-use diesel::prelude::*;
-
-use brdgme_db::models::*;
+use rand::{self, Rng};
+use chrono::{NaiveDateTime, Duration, UTC};
 
 use CONN;
 use to_error_response;
+use errors::*;
+
+lazy_static! {
+    static ref TOKEN_EXPIRY: Duration = Duration::minutes(30);
+}
 
 pub fn namespace(ns: &mut Namespace) {
     ns.post("", |endpoint| {
@@ -27,31 +31,64 @@ pub fn namespace(ns: &mut Namespace) {
     });
 }
 
+fn generate_login_confirmation() -> String {
+    let mut rng = rand::thread_rng();
+    format!("{}{:05}",
+            (rng.gen::<usize>() % 9) + 1,
+            rng.gen::<usize>() % 100000)
+}
+
 pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
-    use brdgme_db::schema::user_emails::dsl::*;
+    let create_email = params.pointer("/email").and_then(|v| v.as_str());
+    let ref conn = *CONN.w.get().map_err(to_error_response)?;
 
-    let create_email = params.pointer("/email").and_then(|v| v.as_str()).unwrap_or_else(|| "");
-    let ref conn_r = *CONN.r
-                          .get()
-                          .map_err(to_error_response)?;
-    let ref conn_w = *CONN.w
-                          .get()
-                          .map_err(to_error_response)?;
+    let mut opt_user_id: Option<i32> = None;
+    let mut opt_login_confirmation: Option<String> = None;
+    for row in &conn.query("
+        SELECT
+            user_id,
+            login_confirmation,
+            login_confirmation_at
+        FROM user_emails AS ue
+        INNER JOIN users AS u
+        ON ue.user_id = u.id
+        WHERE ue.email = $1
+        LIMIT 1",
+                           &[&create_email])
+                    .map_err(to_error_response)? {
+        opt_user_id = Some(row.get("user_id"));
+        if let Some(at) = row.get::<_, Option<NaiveDateTime>>("login_confirmation_at") {
+            if at + *TOKEN_EXPIRY > UTC::now().naive_utc() {
+                // There's a token that's still valid, use it.
+                opt_login_confirmation = row.get("login_confirmation");
+            }
+        }
+    }
 
-    // Check if there already exists a user with that email.
-    let results = user_emails.filter(email.eq(create_email))
-        .limit(1)
-        .load::<UserEmail>(conn_r)
+    let user_id = opt_user_id.or_else(|| {
+                     // We couldn't find a user, so we need to create one.
+                     None
+                 })
+        .ok_or::<Error>("unable to create user with that email".into())
         .map_err(to_error_response)?;
-    /*let user = if results.is_empty() {
-        diesel::insert(&NewUser {
-            ..Default::default()
-        }).get_result(conn_w).map_err(to_error_response)?
-    } else {
-    }*/
+
     client.json(&create_email.to_json())
 }
 
 pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
     client.json(&params.to_json())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_login_confirmation_works() {
+        for _ in 1..100000 {
+            let n: usize = generate_login_confirmation().parse().unwrap();
+            assert!(n > 99999, "n <= 99999");
+            assert!(n < 1000000, "n >= 1000000");
+        }
+    }
 }

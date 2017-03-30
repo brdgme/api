@@ -6,12 +6,11 @@ authors = ["Michael Alexander <beefsack@gmail.com>"]
 [dependencies]
 brdgme-std = { git = "https://github.com/brdgme/std.git" }
 brdgme-db = { git = "https://github.com/brdgme/db.git" }
-diesel = { version = "*", features = ["postgres", "uuid", "chrono"] }
-diesel_codegen = { version = "*", features = ["postgres"] }
-r2d2 = "*"
-r2d2-diesel = "*"
 lazy_static = "*"
 error-chain = "*"
+postgres = { version = "*", features=["with-uuid", "with-chrono"] }
+rand = "*"
+chrono = "*"
 rustless = "0.10.0"
 iron = "0.4.0"
 hyper = "0.9.18"
