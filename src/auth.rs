@@ -5,11 +5,12 @@ use rustless::backend::HandleResult;
 use rustless::Nesting;
 use valico::json_dsl;
 use rand::{self, Rng};
-use chrono::{NaiveDateTime, Duration, UTC};
+use chrono::{Duration, UTC};
+
+use brdgme_db::query;
 
 use CONN;
 use to_error_response;
-use errors::*;
 
 lazy_static! {
     static ref TOKEN_EXPIRY: Duration = Duration::minutes(30);
@@ -39,40 +40,22 @@ fn generate_login_confirmation() -> String {
 }
 
 pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
-    let create_email = params.pointer("/email").and_then(|v| v.as_str());
+    let create_email = params
+        .pointer("/email")
+        .and_then(|v| v.as_str())
+        .unwrap();
     let ref conn = *CONN.w.get().map_err(to_error_response)?;
 
-    let mut opt_user_id: Option<i32> = None;
-    let mut opt_login_confirmation: Option<String> = None;
-    for row in &conn.query("
-        SELECT
-            user_id,
-            login_confirmation,
-            login_confirmation_at
-        FROM user_emails AS ue
-        INNER JOIN users AS u
-        ON ue.user_id = u.id
-        WHERE ue.email = $1
-        LIMIT 1",
-                           &[&create_email])
-                    .map_err(to_error_response)? {
-        opt_user_id = Some(row.get("user_id"));
-        if let Some(at) = row.get::<_, Option<NaiveDateTime>>("login_confirmation_at") {
-            if at + *TOKEN_EXPIRY > UTC::now().naive_utc() {
-                // There's a token that's still valid, use it.
-                opt_login_confirmation = row.get("login_confirmation");
-            }
-        }
-    }
+    let user = query::find_or_create_user_by_email(create_email, conn)
+        .map_err(to_error_response)?
+        .user;
 
-    let user_id = opt_user_id.or_else(|| {
-                     // We couldn't find a user, so we need to create one.
-                     None
-                 })
-        .ok_or::<Error>("unable to create user with that email".into())
-        .map_err(to_error_response)?;
+    let confirmation = match (user.login_confirmation, user.login_confirmation_at) {
+        (Some(ref uc), Some(at)) if at + *TOKEN_EXPIRY > UTC::now().naive_utc() => uc.to_owned(),
+        _ => query::generate_user_login_confirmation(&user.id, conn).map_err(to_error_response)?,
+    };
 
-    client.json(&create_email.to_json())
+    client.empty()
 }
 
 pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
