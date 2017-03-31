@@ -1,7 +1,6 @@
 #![recursion_limit = "1024"]
 
 extern crate rustless;
-extern crate hyper;
 extern crate iron;
 extern crate valico;
 extern crate email;
