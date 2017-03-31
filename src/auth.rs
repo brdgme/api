@@ -4,13 +4,15 @@ use rustless::json::{JsonValue, ToJson};
 use rustless::backend::HandleResult;
 use rustless::Nesting;
 use valico::json_dsl;
-use rand::{self, Rng};
 use chrono::{Duration, UTC};
+use lettre::email::EmailBuilder;
 
 use brdgme_db::query;
 
+use errors::*;
 use CONN;
 use to_error_response;
+use mail;
 
 lazy_static! {
     static ref TOKEN_EXPIRY: Duration = Duration::minutes(30);
@@ -32,13 +34,6 @@ pub fn namespace(ns: &mut Namespace) {
     });
 }
 
-fn generate_login_confirmation() -> String {
-    let mut rng = rand::thread_rng();
-    format!("{}{:05}",
-            (rng.gen::<usize>() % 9) + 1,
-            rng.gen::<usize>() % 100000)
-}
-
 pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
     let create_email = params
         .pointer("/email")
@@ -55,6 +50,20 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
         _ => query::generate_user_login_confirmation(&user.id, conn).map_err(to_error_response)?,
     };
 
+    mail::send(EmailBuilder::new()
+        .to(create_email)
+        .from("play@brdg.me")
+        .subject("brdg.me login confirmation")
+        .html(&mail::html_layout(&format!("Your brdg.me confirmation is <b>{}</b>
+
+This confirmation will expire in 30 minutes if not used.", confirmation)))
+        .build()
+        .chain_err(|| "unable to create login confirmation email")
+        .map_err(to_error_response)?
+    )
+    .chain_err(|| "unable to send login confirmation email")
+    .map_err(to_error_response)?;
+
     client.empty()
 }
 
@@ -64,14 +73,6 @@ pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
-    fn generate_login_confirmation_works() {
-        for _ in 1..100000 {
-            let n: usize = generate_login_confirmation().parse().unwrap();
-            assert!(n > 99999, "n <= 99999");
-            assert!(n < 1000000, "n >= 1000000");
-        }
-    }
+    fn it_works() {}
 }

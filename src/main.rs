@@ -11,6 +11,8 @@ extern crate error_chain;
 extern crate postgres;
 extern crate rand;
 extern crate chrono;
+extern crate lettre;
+extern crate env_logger;
 
 extern crate brdgme_db;
 
@@ -20,6 +22,7 @@ use rustless::errors::{Error, ErrorResponse};
 
 use std::default::Default;
 
+mod config;
 mod auth;
 mod game;
 mod mail;
@@ -40,6 +43,7 @@ pub fn to_error_response<T: Error + Send>(e: T) -> ErrorResponse {
 }
 
 fn main() {
+    env_logger::init().unwrap();
     let api = Api::build(|api| {
         api.prefix("api");
         api.mount(swagger::create_api("docs"));
@@ -59,5 +63,6 @@ fn main() {
                         },
                         ..Default::default()
                     });
+
     iron::Iron::new(app).http("0.0.0.0:8000").unwrap();
 }

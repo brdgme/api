@@ -6,9 +6,11 @@ dependencies = [
  "brdgme-std 0.1.0 (git+https://github.com/brdgme/std.git)",
  "chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "email 0.0.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "env_logger 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "iron 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lettre 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "postgres 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustless 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -84,7 +86,7 @@ dependencies = [
 [[package]]
 name = "brdgme-db"
 version = "0.1.0"
-source = "git+https://github.com/brdgme/db.git#84189ef9304a077ded2ba07f1052405b5a9ede0a"
+source = "git+https://github.com/brdgme/db.git#711fe605b3361e8e9da8b7db3849b86c6917971d"
 dependencies = [
  "brdgme-std 0.1.0 (git+https://github.com/brdgme/std.git)",
  "chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -100,10 +102,11 @@ dependencies = [
 [[package]]
 name = "brdgme-std"
 version = "0.1.0"
-source = "git+https://github.com/brdgme/std.git#3231249b522d458400356e036ea2a4d80f8488c0"
+source = "git+https://github.com/brdgme/std.git#a7efe1b7e0e18f8e0fa6cbc85104bddaca5e21bd"
 dependencies = [
  "chrono 0.2.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "combine 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "env_logger 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lettre 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -273,6 +276,15 @@ dependencies = [
 name = "encoding_index_tests"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "env_logger"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "log 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "error"
@@ -1109,6 +1121,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum encoding-index-singlebyte 1.20141219.5 (registry+https://github.com/rust-lang/crates.io-index)" = "3351d5acffb224af9ca265f435b859c7c01537c0849754d3db3fdf2bfe2ae84a"
 "checksum encoding-index-tradchinese 1.20141219.5 (registry+https://github.com/rust-lang/crates.io-index)" = "fd0e20d5688ce3cab59eb3ef3a2083a5c77bf496cb798dc6fcdb75f323890c18"
 "checksum encoding_index_tests 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "a246d82be1c9d791c5dfde9a2bd045fc3cbba3fa2b11ad558f27d01712f00569"
+"checksum env_logger 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "99971fb1b635fe7a0ee3c4d065845bb93cca80a23b5613b5613391ece5de4144"
 "checksum error 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "a6e606f14042bb87cc02ef6a14db6c90ab92ed6f62d87e69377bc759fd7987cc"
 "checksum error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d9435d864e017c3c6afeac1654189b06cdb491cf2ff73dbf0d73b0f292f42ff8"
 "checksum error-chain 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)" = "6930e04918388a9a2e41d518c25cf679ccafe26733fb4127dbf21993f2575d46"

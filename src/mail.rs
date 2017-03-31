@@ -4,6 +4,12 @@ use rustless::json::JsonValue;
 use rustless::backend::HandleResult;
 use rustless::Nesting;
 use email::MimeMessage;
+use lettre::email::SendableEmail;
+use lettre::transport::EmailTransport;
+use lettre::transport::smtp::{SmtpTransportBuilder, SUBMISSION_PORT};
+
+use config::CONFIG;
+use errors::*;
 
 pub fn namespace(ns: &mut Namespace) {
     ns.post("", |endpoint| {
@@ -32,4 +38,20 @@ fn extract_bodies(mm: &MimeMessage) -> Vec<String> {
         bodies.extend(extract_bodies(c));
     }
     bodies
+}
+
+pub fn html_layout(content: &str) -> String {
+    format!("<link href=\"https://fonts.googleapis.com/css?family=Source+Code+Pro\" rel=\"stylesheet\"><pre style=\"background-color: white; color: black; font-family: 'Source Code Pro', monospace;\">{}</pre>",
+            content)
+}
+
+pub fn send<T: SendableEmail>(email: T) -> Result<()> {
+    SmtpTransportBuilder::new((CONFIG.smtp_addr.as_ref(), SUBMISSION_PORT))
+        .chain_err(|| "could not initialise SMTP transport")?
+        .encrypt()
+        .credentials(&CONFIG.smtp_user, &CONFIG.smtp_pass)
+        .build()
+        .send(email)
+        .map(|_| ())
+        .chain_err(|| "unable to send email")
 }
