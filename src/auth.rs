@@ -4,7 +4,6 @@ use rustless::json::{JsonValue, ToJson};
 use rustless::backend::HandleResult;
 use rustless::Nesting;
 use valico::json_dsl;
-use chrono::{Duration, UTC};
 use lettre::email::EmailBuilder;
 
 use brdgme_db::query;
@@ -14,20 +13,16 @@ use CONN;
 use to_error_response;
 use mail;
 
-lazy_static! {
-    static ref TOKEN_EXPIRY: Duration = Duration::minutes(30);
-}
-
 pub fn namespace(ns: &mut Namespace) {
     ns.post("", |endpoint| {
-        endpoint.desc("Request auth token");
+        endpoint.desc("Request login");
         endpoint.params(|params| { params.req_typed("email", json_dsl::string()); });
         endpoint.handle(create)
     });
-    ns.post(":token/confirm", |endpoint| {
-        endpoint.desc("Show game");
+    ns.post("confirm", |endpoint| {
+        endpoint.desc("Confirm login");
         endpoint.params(|params| {
-                            params.req_typed("token", json_dsl::string());
+                            params.req_typed("email", json_dsl::string());
                             params.req_typed("code", json_dsl::string());
                         });
         endpoint.handle(confirm)
@@ -35,20 +30,12 @@ pub fn namespace(ns: &mut Namespace) {
 }
 
 pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
-    let create_email = params
-        .pointer("/email")
+    let create_email = params.pointer("/email")
         .and_then(|v| v.as_str())
-        .unwrap();
+        .ok_or::<Error>("unable to get email parameter".into())
+        .map_err(to_error_response)?;
     let ref conn = *CONN.w.get().map_err(to_error_response)?;
-
-    let user = query::find_or_create_user_by_email(create_email, conn)
-        .map_err(to_error_response)?
-        .user;
-
-    let confirmation = match (user.login_confirmation, user.login_confirmation_at) {
-        (Some(ref uc), Some(at)) if at + *TOKEN_EXPIRY > UTC::now().naive_utc() => uc.to_owned(),
-        _ => query::generate_user_login_confirmation(&user.id, conn).map_err(to_error_response)?,
-    };
+    let confirmation = query::user_login_request(create_email, conn).map_err(to_error_response)?;
 
     mail::send(EmailBuilder::new()
         .to(create_email)
@@ -68,7 +55,20 @@ This confirmation will expire in 30 minutes if not used.", confirmation)))
 }
 
 pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
-    client.json(&params.to_json())
+    let email = params.pointer("/email")
+        .and_then(|v| v.as_str())
+        .ok_or::<Error>("unable to get email parameter".into())
+        .map_err(to_error_response)?;
+    let confirm = params.pointer("/confirm")
+        .and_then(|v| v.as_str())
+        .ok_or::<Error>("unable to get confirm parameter".into())
+        .map_err(to_error_response)?;
+    let ref conn = *CONN.w.get().map_err(to_error_response)?;
+
+    match query::user_login_confirm(email, confirm, conn).map_err(to_error_response)? {
+        Some(token) => client.json(&token.id.to_string().to_json()),
+        None => client.error::<Error>("blah".into()),
+    }
 }
 
 #[cfg(test)]

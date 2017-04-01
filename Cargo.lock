@@ -86,7 +86,7 @@ dependencies = [
 [[package]]
 name = "brdgme-db"
 version = "0.1.0"
-source = "git+https://github.com/brdgme/db.git#711fe605b3361e8e9da8b7db3849b86c6917971d"
+source = "git+https://github.com/brdgme/db.git#6796585ca73f71f2cdac914756e1b863bdeb8e57"
 dependencies = [
  "brdgme-std 0.1.0 (git+https://github.com/brdgme/std.git)",
  "chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
