@@ -23,7 +23,7 @@ pub fn namespace(ns: &mut Namespace) {
         endpoint.desc("Confirm login");
         endpoint.params(|params| {
                             params.req_typed("email", json_dsl::string());
-                            params.req_typed("code", json_dsl::string());
+                            params.req_typed("confirmation", json_dsl::string());
                         });
         endpoint.handle(confirm)
     });
@@ -59,13 +59,13 @@ pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
         .and_then(|v| v.as_str())
         .ok_or::<Error>("unable to get email parameter".into())
         .map_err(to_error_response)?;
-    let confirm = params.pointer("/confirm")
+    let confirmation = params.pointer("/confirmation")
         .and_then(|v| v.as_str())
-        .ok_or::<Error>("unable to get confirm parameter".into())
+        .ok_or::<Error>("unable to get confirmation parameter".into())
         .map_err(to_error_response)?;
     let ref conn = *CONN.w.get().map_err(to_error_response)?;
 
-    match query::user_login_confirm(email, confirm, conn).map_err(to_error_response)? {
+    match query::user_login_confirm(email, confirmation, conn).map_err(to_error_response)? {
         Some(token) => client.json(&token.id.to_string().to_json()),
         None => client.error::<Error>("blah".into()),
     }
