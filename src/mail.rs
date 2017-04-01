@@ -6,9 +6,12 @@ use rustless::Nesting;
 use email::MimeMessage;
 use lettre::email::SendableEmail;
 use lettre::transport::EmailTransport;
+use lettre::transport::file::FileEmailTransport;
 use lettre::transport::smtp::{SmtpTransportBuilder, SUBMISSION_PORT};
 
-use config::CONFIG;
+use std::env::temp_dir;
+
+use config::{CONFIG, Mail};
 use errors::*;
 
 pub fn namespace(ns: &mut Namespace) {
@@ -46,12 +49,26 @@ pub fn html_layout(content: &str) -> String {
 }
 
 pub fn send<T: SendableEmail>(email: T) -> Result<()> {
-    SmtpTransportBuilder::new((CONFIG.smtp_addr.as_ref(), SUBMISSION_PORT))
-        .chain_err(|| "could not initialise SMTP transport")?
-        .encrypt()
-        .credentials(&CONFIG.smtp_user, &CONFIG.smtp_pass)
-        .build()
-        .send(email)
-        .map(|_| ())
-        .chain_err(|| "unable to send email")
+    match &CONFIG.mail {
+        &Mail::File => {
+            FileEmailTransport::new(temp_dir())
+                .send(email)
+                .map(|_| ())
+                .chain_err(|| "unable to send email")
+        }
+        &Mail::Smtp {
+             ref addr,
+             ref user,
+             ref pass,
+         } => {
+            SmtpTransportBuilder::new((addr.as_ref(), SUBMISSION_PORT))
+                .chain_err(|| "could not initialise SMTP transport")?
+                .encrypt()
+                .credentials(user, pass)
+                .build()
+                .send(email)
+                .map(|_| ())
+                .chain_err(|| "unable to send email")
+        }
+    }
 }
