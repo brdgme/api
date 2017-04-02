@@ -12,6 +12,7 @@ postgres = { version = "*", features=["with-uuid", "with-chrono"] }
 rand = "*"
 chrono = "*"
 lettre = "*"
+log = "*"
 env_logger = "*"
 rustless = "0.10.0"
 iron = "0.4.0"

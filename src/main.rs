@@ -12,6 +12,7 @@ extern crate postgres;
 extern crate rand;
 extern crate chrono;
 extern crate lettre;
+extern crate log;
 extern crate env_logger;
 
 extern crate brdgme_db;
