@@ -3,10 +3,12 @@ use rustless::framework::Namespace;
 use rustless::json::{JsonValue, ToJson};
 use rustless::backend::HandleResult;
 use rustless::Nesting;
+use rustless::server::header;
 use valico::json_dsl;
 use lettre::email::EmailBuilder;
+use uuid::Uuid;
 
-use brdgme_db::query;
+use brdgme_db::{query, models};
 
 use errors::*;
 use CONN;
@@ -65,8 +67,24 @@ pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
 
     match query::user_login_confirm(email, confirmation, conn).chain_err(|| "unable to confirm login")? {
         Some(token) => client.json(&token.id.to_string().to_json()),
-        None => client.error::<Error>("blah".into()),
+        None => client.error::<Error>("unable to confirm login".into()),
     }
+}
+
+pub fn authenticate<'a>(client: &Client<'a>) -> Result<query::UserByEmail> {
+    let conn = CONN.r.get().chain_err(|| "unable to get connection")?;
+    let auth_header = &client.request
+                           .headers()
+                           .get::<header::Authorization<header::Basic>>()
+                           .ok_or::<Error>("unable to get Authorization header".into())?;
+    let email = auth_header.username.to_owned();
+    let password = auth_header.password
+        .to_owned()
+        .ok_or::<Error>("password not specified".into())?;
+    Ok(query::authenticate(&email, &Uuid::parse_str(&password)
+        .map_err::<Error, _>(|_| "invalid password".into())?, &conn)
+        .chain_err(|| "unable to authenticate")?.ok_or::<Error>("unable to authenticate".into())?)
+
 }
 
 #[cfg(test)]

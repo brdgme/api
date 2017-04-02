@@ -14,6 +14,7 @@ extern crate chrono;
 extern crate lettre;
 extern crate log;
 extern crate env_logger;
+extern crate uuid;
 
 extern crate brdgme_db;
 
