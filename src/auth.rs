@@ -10,7 +10,6 @@ use brdgme_db::query;
 
 use errors::*;
 use CONN;
-use to_error_response;
 use mail;
 
 pub fn namespace(ns: &mut Namespace) {
@@ -30,12 +29,15 @@ pub fn namespace(ns: &mut Namespace) {
 }
 
 pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
-    let create_email = params.pointer("/email")
-        .and_then(|v| v.as_str())
-        .ok_or::<Error>("unable to get email parameter".into())
-        .map_err(to_error_response)?;
-    let ref conn = *CONN.w.get().map_err(to_error_response)?;
-    let confirmation = query::user_login_request(create_email, conn).map_err(to_error_response)?;
+    let params = params.as_object()
+        .ok_or::<Error>("params not an object".into())?;
+    let create_email = params.get("email")
+        .ok_or::<Error>("email param missing".into())?
+        .as_str()
+        .ok_or::<Error>("email not a string".into())?;
+    let ref conn = *CONN.w.get().chain_err(|| "unable to get connection")?;
+    let confirmation =
+        query::user_login_request(create_email, conn).chain_err(|| "unable to request user login")?;
 
     mail::send(EmailBuilder::new()
         .to(create_email)
@@ -45,11 +47,9 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
 
 This confirmation will expire in 30 minutes if not used.", confirmation)))
         .build()
-        .chain_err(|| "unable to create login confirmation email")
-        .map_err(to_error_response)?
+        .chain_err(|| "unable to create login confirmation email")?
     )
-    .chain_err(|| "unable to send login confirmation email")
-    .map_err(to_error_response)?;
+    .chain_err(|| "unable to send login confirmation email")?;
 
     client.empty()
 }
@@ -57,15 +57,13 @@ This confirmation will expire in 30 minutes if not used.", confirmation)))
 pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
     let email = params.pointer("/email")
         .and_then(|v| v.as_str())
-        .ok_or::<Error>("unable to get email parameter".into())
-        .map_err(to_error_response)?;
+        .ok_or::<Error>("unable to get email parameter".into())?;
     let confirmation = params.pointer("/confirmation")
         .and_then(|v| v.as_str())
-        .ok_or::<Error>("unable to get confirmation parameter".into())
-        .map_err(to_error_response)?;
-    let ref conn = *CONN.w.get().map_err(to_error_response)?;
+        .ok_or::<Error>("unable to get confirmation parameter".into())?;
+    let ref conn = *CONN.w.get().chain_err(|| "unable to get connection")?;
 
-    match query::user_login_confirm(email, confirmation, conn).map_err(to_error_response)? {
+    match query::user_login_confirm(email, confirmation, conn).chain_err(|| "unable to confirm login")? {
         Some(token) => client.json(&token.id.to_string().to_json()),
         None => client.error::<Error>("blah".into()),
     }

@@ -30,17 +30,19 @@ mod mail;
 
 mod errors {
     error_chain!{}
+
+    impl From<Error> for ::ErrorResponse {
+        fn from(e: Error) -> Self {
+            Self {
+                error: Box::new(e),
+                response: None,
+            }
+        }
+    }
 }
 
 lazy_static! {
     pub static ref CONN: brdgme_db::Connections = brdgme_db::connect_env().unwrap();
-}
-
-pub fn to_error_response<T: Error + Send>(e: T) -> ErrorResponse {
-    ErrorResponse {
-        error: Box::new(e),
-        response: None,
-    }
 }
 
 fn main() {
