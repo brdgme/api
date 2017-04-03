@@ -2,17 +2,43 @@ use rustless::framework::client::Client;
 use rustless::framework::Namespace;
 use rustless::json::{JsonValue, ToJson};
 use rustless::backend::HandleResult;
-use rustless::Nesting;
+use rustless::{Nesting, ErrorResponse};
 use rustless::server::header;
 use valico::json_dsl;
 use lettre::email::EmailBuilder;
 use uuid::Uuid;
 
-use brdgme_db::{query, models};
+use brdgme_db::query;
+
+use std::{error, fmt};
 
 use errors::*;
 use CONN;
 use mail;
+
+#[derive(Debug)]
+pub struct UnauthorizedError;
+
+impl fmt::Display for UnauthorizedError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "UnauthorizedError")
+    }
+}
+
+impl error::Error for UnauthorizedError {
+    fn description(&self) -> &str {
+        "UnauthorizedError"
+    }
+}
+
+impl Into<ErrorResponse> for UnauthorizedError {
+    fn into(self) -> ErrorResponse {
+        ErrorResponse {
+            error: Box::new(self),
+            response: None,
+        }
+    }
+}
 
 pub fn namespace(ns: &mut Namespace) {
     ns.post("", |endpoint| {
@@ -71,7 +97,7 @@ pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
     }
 }
 
-pub fn authenticate<'a>(client: &Client<'a>) -> Result<query::UserByEmail> {
+pub fn authenticate<'a>(client: &Client<'a>) -> HandleResult<query::UserByEmail> {
     let conn = CONN.r.get().chain_err(|| "unable to get connection")?;
     let auth_header = &client.request
                            .headers()
@@ -82,8 +108,8 @@ pub fn authenticate<'a>(client: &Client<'a>) -> Result<query::UserByEmail> {
         .to_owned()
         .ok_or::<Error>("password not specified".into())?;
     Ok(query::authenticate(&email, &Uuid::parse_str(&password)
-        .map_err::<Error, _>(|_| "invalid password".into())?, &conn)
-        .chain_err(|| "unable to authenticate")?.ok_or::<Error>("unable to authenticate".into())?)
+        .map_err::<ErrorResponse, _>(|_| UnauthorizedError{}.into())?, &conn)
+        .chain_err(|| "unable to authenticate")?.ok_or::<ErrorResponse>(UnauthorizedError{}.into())?)
 
 }
 

@@ -18,7 +18,8 @@ extern crate uuid;
 
 extern crate brdgme_db;
 
-use rustless::{Application, Api, Nesting, Versioning};
+use rustless::{Application, Api, Nesting, Versioning, Response};
+use rustless::server::status::StatusCode;
 use rustless::batteries::swagger;
 use rustless::errors::{Error, ErrorResponse};
 
@@ -57,6 +58,10 @@ fn main() {
                                  v1.namespace("game", game::namespace);
                                  v1.namespace("mail", mail::namespace);
                              }));
+        api.error_formatter(|err, _media| match err.downcast::<auth::UnauthorizedError>() {
+                                Some(_) => Some(Response::new(StatusCode::Unauthorized)),
+                                None => None,
+                            });
     });
     let mut app = Application::new(api);
     swagger::enable(&mut app,
