@@ -98,7 +98,7 @@ pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
 }
 
 pub fn authenticate<'a>(client: &Client<'a>) -> HandleResult<query::UserByEmail> {
-    let conn = CONN.r.get().chain_err(|| "unable to get connection")?;
+    let ref conn = *CONN.r.get().chain_err(|| "unable to get connection")?;
     let auth_header = &client.request
                            .headers()
                            .get::<header::Authorization<header::Basic>>()
@@ -108,7 +108,7 @@ pub fn authenticate<'a>(client: &Client<'a>) -> HandleResult<query::UserByEmail>
         .to_owned()
         .ok_or::<Error>("password not specified".into())?;
     Ok(query::authenticate(&email, &Uuid::parse_str(&password)
-        .map_err::<ErrorResponse, _>(|_| UnauthorizedError{}.into())?, &conn)
+        .map_err::<ErrorResponse, _>(|_| UnauthorizedError{}.into())?, conn)
         .chain_err(|| "unable to authenticate")?.ok_or::<ErrorResponse>(UnauthorizedError{}.into())?)
 
 }
