@@ -7,6 +7,7 @@ use rustless::server::header;
 use valico::json_dsl;
 use lettre::email::EmailBuilder;
 use uuid::Uuid;
+use postgres::GenericConnection;
 
 use brdgme_db::query;
 
@@ -57,14 +58,7 @@ pub fn namespace(ns: &mut Namespace) {
 }
 
 pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
-    let params = params
-        .as_object()
-        .ok_or::<Error>("params not an object".into())?;
-    let create_email = params
-        .get("email")
-        .ok_or::<Error>("email param missing".into())?
-        .as_str()
-        .ok_or::<Error>("email not a string".into())?;
+    let create_email = params.find("email").unwrap().as_str().unwrap();
     let ref conn = *CONN.w.get().chain_err(|| "unable to get connection")?;
     let confirmation = query::user_login_request(create_email, conn)
         .chain_err(|| "unable to request user login")?;
@@ -85,14 +79,8 @@ This confirmation will expire in 30 minutes if not used.",
 }
 
 pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
-    let email = params
-        .pointer("/email")
-        .and_then(|v| v.as_str())
-        .ok_or::<Error>("unable to get email parameter".into())?;
-    let confirmation = params
-        .pointer("/confirmation")
-        .and_then(|v| v.as_str())
-        .ok_or::<Error>("unable to get confirmation parameter".into())?;
+    let email = params.find("email").unwrap().as_str().unwrap();
+    let confirmation = params.find("confirmation").unwrap().as_str().unwrap();
     let ref conn = *CONN.w.get().chain_err(|| "unable to get connection")?;
 
     match query::user_login_confirm(email, confirmation, conn)
@@ -102,18 +90,20 @@ pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
     }
 }
 
-pub fn authenticate<'a>(client: &Client<'a>) -> HandleResult<query::UserByEmail> {
-    let ref conn = *CONN.r.get().chain_err(|| "unable to get connection")?;
+pub fn authenticate<'a>(client: &Client<'a>,
+                        conn: &GenericConnection)
+                        -> HandleResult<query::UserByEmail> {
     let auth_header = &client
                            .request
                            .headers()
                            .get::<header::Authorization<header::Basic>>()
                            .ok_or::<Error>("unable to get Authorization header".into())?;
     let email = auth_header.username.to_owned();
-    let password = auth_header
-        .password
-        .to_owned()
-        .ok_or::<Error>("password not specified".into())?;
+    let password =
+        auth_header
+            .password
+            .to_owned()
+            .ok_or::<Error>(ErrorKind::UserError("password not specified".to_string()).into())?;
     Ok(query::authenticate(&email,
                            &Uuid::parse_str(&password)
                                 .map_err::<ErrorResponse, _>(|_| UnauthorizedError {}.into())?,

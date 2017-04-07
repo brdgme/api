@@ -21,6 +21,7 @@ extern crate serde_json;
 
 extern crate brdgme_db;
 extern crate brdgme_cmd;
+extern crate brdgme_game;
 
 use rustless::{Application, Api, Nesting, Versioning, Response};
 use rustless::server::status::StatusCode;
@@ -39,6 +40,13 @@ mod errors {
         links {
             Db(::brdgme_db::errors::Error, ::brdgme_db::errors::ErrorKind);
         }
+
+        errors {
+            UserError(message: String) {
+                description("user error")
+                display("{}", message)
+            }
+        }
     }
 
     impl From<Error> for ::ErrorResponse {
@@ -49,7 +57,13 @@ mod errors {
             }
         }
     }
+
+    pub fn err_resp(msg: &str) -> ::ErrorResponse {
+        let err: Error = ErrorKind::Msg(msg.to_owned()).into();
+        err.into()
+    }
 }
+use errors::*;
 
 lazy_static! {
     pub static ref CONN: brdgme_db::Connections = brdgme_db::connect_env().unwrap();
@@ -69,6 +83,13 @@ fn main() {
         api.error_formatter(|err, _media| match err.downcast::<auth::UnauthorizedError>() {
                                 Some(_) => Some(Response::new(StatusCode::Unauthorized)),
                                 None => None,
+                            });
+        api.error_formatter(|err, _media| match err.downcast::<Error>() {
+                                Some(&Error(ErrorKind::UserError(ref message), _)) => {
+                                    Some(Response::from(StatusCode::BadRequest,
+                                                        Box::new(message.to_owned())))
+                                }
+                                _ => None,
                             });
     });
     let mut app = Application::new(api);

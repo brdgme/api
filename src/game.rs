@@ -10,8 +10,9 @@ use hyper::net::HttpsConnector;
 use hyper_native_tls::NativeTlsClient;
 use serde_json;
 
-use brdgme_db::query;
+use brdgme_db::{query, models};
 use brdgme_cmd::cli;
+use brdgme_game::Status;
 
 use auth::authenticate;
 use errors::*;
@@ -54,13 +55,16 @@ pub fn index<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<
 
 pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
     // Parse input
-    let ube = authenticate(&client)?;
     let game_version_id = Uuid::parse_str(params
                                               .find("game_version_id")
                                               .unwrap()
                                               .as_str()
                                               .unwrap())
-            .map_err::<Error, _>(|_| "game_version_id is not a UUID".into())?;
+            .map_err::<Error, _>(|_| {
+                                     ErrorKind::UserError("game_version_id is not a UUID"
+                                                              .to_string())
+                                             .into()
+                                 })?;
     let opponent_ids: Vec<Uuid> = match params.find("opponent_ids") {
         Some(ref v) => {
             v.as_array()
@@ -82,33 +86,70 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
         None => vec![],
     };
 
+    let ref conn = *CONN.w.get().chain_err(|| "unable to get connection")?;
+    let ube = authenticate(&client, conn)?;
     let player_count: usize = 1 + opponent_ids.len() + opponent_emails.len();
 
-    let ref conn = *CONN.w.get().chain_err(|| "unable to get connection")?;
     let trans = conn.transaction()
         .chain_err(|| "error starting transaction")?;
     let game_version = query::find_game_version(&game_version_id, &trans)
         .chain_err(|| "error finding game version")?
         .ok_or_else::<Error, _>(|| "could not find game version".into())?;
 
-    let ssl = NativeTlsClient::new().unwrap();
-    let connector = HttpsConnector::new(ssl);
-    let https = HttpClient::with_connector(connector);
-    let res = https
-        .post(&game_version.uri)
-        .body(&serde_json::to_string(&cli::Request::New { players: player_count }).unwrap())
-        .send()
-        .chain_err(|| "error getting new game state")?;
-    if res.status != hyper::Ok {}
-    let resp: cli::Response = serde_json::from_reader(res)
-        .chain_err(|| "error parsing JSON response")?;
-    println!("{:?}", resp);
+    let resp = game_request(&game_version.uri,
+                            &cli::Request::New { players: player_count })?;
+    let (game_info, logs) = match resp {
+        cli::Response::New { game, logs } => (game, logs),
+        _ => bail!(err_resp("expected cli::Response::New")),
+    };
+    let (is_finished, whose_turn, eliminated, winners) = match game_info.status {
+        Status::Active {
+            whose_turn,
+            eliminated,
+        } => (false, whose_turn, eliminated, vec![]),
+        Status::Finished { winners } => (true, vec![], vec![], winners),
+    };
+    let created_game = query::create_game_with_users(&models::NewGame {
+                                                          game_version_id: &game_version_id,
+                                                          is_finished: is_finished,
+                                                          game_state: &game_info.state,
+                                                      },
+                                                     &whose_turn,
+                                                     &eliminated,
+                                                     &winners,
+                                                     &ube.user.id,
+                                                     &opponent_ids,
+                                                     &opponent_emails,
+                                                     &trans)
+            .chain_err(|| "unable to create game")?;
+    let created_logs = query::create_game_logs_from_cli(&created_game.game.id, logs, &trans)
+        .chain_err(|| "unable to create game logs")?;
 
     trans
         .commit()
         .chain_err(|| "error committing transaction")?;
 
-    client.json(&opponent_emails.to_json())
+    client.json(&created_game.game.game_state.to_json())
+}
+
+fn game_request(uri: &str, request: &cli::Request) -> Result<cli::Response> {
+    let ssl = NativeTlsClient::new().unwrap();
+    let connector = HttpsConnector::new(ssl);
+    let https = HttpClient::with_connector(connector);
+    let res = https
+        .post(uri)
+        .body(&serde_json::to_string(request).unwrap())
+        .send()
+        .chain_err(|| "error getting new game state")?;
+    if res.status != hyper::Ok {
+        bail!("request failed");
+    }
+    match serde_json::from_reader::<_, cli::Response>(res)
+              .chain_err(|| "error parsing JSON response")? {
+        cli::Response::UserError { message } => Err(ErrorKind::UserError(message).into()),
+        cli::Response::SystemError { message } => Err(message.into()),
+        default => Ok(default),
+    }
 }
 
 pub fn show<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {

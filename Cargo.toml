@@ -7,6 +7,7 @@ authors = ["Michael Alexander <beefsack@gmail.com>"]
 brdgme-std = { git = "https://github.com/brdgme/std.git" }
 brdgme-db = { git = "https://github.com/brdgme/db.git" }
 brdgme-cmd = { git = "https://github.com/brdgme/cmd.git" }
+brdgme-game = { git = "https://github.com/brdgme/game.git" }
 lazy_static = "*"
 error-chain = "*"
 postgres = { version = "*", features = ["with-uuid", "with-chrono"] }
