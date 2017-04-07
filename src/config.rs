@@ -18,9 +18,12 @@ pub enum Mail {
 impl Mail {
     fn smtp_from_env() -> Result<Self> {
         Ok(Mail::Smtp {
-               addr: env::var("SMTP_ADDR").chain_err(|| "SMTP_ADDR must be set")?,
-               user: env::var("SMTP_USER").chain_err(|| "SMTP_USER must be set")?,
-               pass: env::var("SMTP_PASS").chain_err(|| "SMTP_PASS must be set")?,
+               addr: env::var("SMTP_ADDR")
+                   .chain_err(|| "SMTP_ADDR must be set")?,
+               user: env::var("SMTP_USER")
+                   .chain_err(|| "SMTP_USER must be set")?,
+               pass: env::var("SMTP_PASS")
+                   .chain_err(|| "SMTP_PASS must be set")?,
            })
     }
 
@@ -38,7 +41,8 @@ pub struct Config {
 
 fn from_env() -> Result<Config> {
     Ok(Config {
-           database_url: env::var("DATABASE_URL").chain_err(|| "DATABASE_URL must be set")?,
+           database_url: env::var("DATABASE_URL")
+               .chain_err(|| "DATABASE_URL must be set")?,
            database_url_r: env::var("DATABASE_URL_R").ok(),
            mail: Mail::from_env(),
            mail_from: env::var("MAIL_FROM").unwrap_or_else(|_| "play@brdg.me".to_string()),

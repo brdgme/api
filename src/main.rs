@@ -15,13 +15,17 @@ extern crate lettre;
 extern crate log;
 extern crate env_logger;
 extern crate uuid;
+extern crate hyper;
+extern crate hyper_native_tls;
+extern crate serde_json;
 
 extern crate brdgme_db;
+extern crate brdgme_cmd;
 
 use rustless::{Application, Api, Nesting, Versioning, Response};
 use rustless::server::status::StatusCode;
 use rustless::batteries::swagger;
-use rustless::errors::{Error, ErrorResponse};
+use rustless::errors::ErrorResponse;
 
 use std::default::Default;
 
@@ -31,7 +35,11 @@ mod game;
 mod mail;
 
 mod errors {
-    error_chain!{}
+    error_chain!{
+        links {
+            Db(::brdgme_db::errors::Error, ::brdgme_db::errors::ErrorKind);
+        }
+    }
 
     impl From<Error> for ::ErrorResponse {
         fn from(e: Error) -> Self {
