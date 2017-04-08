@@ -30,6 +30,7 @@ pub fn index<'a>(client: Client<'a>, _params: &JsonValue) -> HandleResult<Client
 }
 
 pub fn handle_inbound_email(e: &str) {
+    // TODO handle error
     let parsed = MimeMessage::parse(e).unwrap();
     let bodies = extract_bodies(&parsed);
     println!("{} {:?}", bodies.len(), bodies);

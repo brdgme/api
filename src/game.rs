@@ -70,6 +70,7 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
             v.as_array()
                 .unwrap()
                 .iter()
+                // TODO handle `parse_str` failures as error instead of panicking.
                 .map(|ref e| Uuid::parse_str(e.as_str().unwrap()).unwrap())
                 .collect()
         }
@@ -133,11 +134,13 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
 }
 
 fn game_request(uri: &str, request: &cli::Request) -> Result<cli::Response> {
+    // TODO handle error
     let ssl = NativeTlsClient::new().unwrap();
     let connector = HttpsConnector::new(ssl);
     let https = HttpClient::with_connector(connector);
     let res = https
         .post(uri)
+        // TODO handle error
         .body(&serde_json::to_string(request).unwrap())
         .send()
         .chain_err(|| "error getting new game state")?;

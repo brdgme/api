@@ -34,7 +34,6 @@ use rustless::batteries::swagger;
 use rustless::errors::ErrorResponse;
 
 use std::default::Default;
-use std::env;
 
 mod config;
 mod auth;
