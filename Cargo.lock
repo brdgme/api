@@ -3,7 +3,7 @@ name = "brdgme-api"
 version = "0.1.0"
 dependencies = [
  "brdgme-cmd 0.1.0 (git+https://github.com/brdgme/cmd.git)",
- "brdgme-db 0.1.0 (git+https://github.com/brdgme/db.git)",
+ "brdgme-color 0.1.0 (git+https://github.com/brdgme/color.git)",
  "brdgme-game 0.1.0 (git+https://github.com/brdgme/game.git)",
  "brdgme-std 0.1.0 (git+https://github.com/brdgme/std.git)",
  "chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -17,6 +17,9 @@ dependencies = [
  "lettre 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "postgres 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "postgres-derive 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "r2d2 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "r2d2_postgres 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustless 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -126,25 +129,6 @@ dependencies = [
  "regex 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 0.9.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 0.9.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "brdgme-db"
-version = "0.1.0"
-source = "git+https://github.com/brdgme/db.git#98f0c8b49aa6fee4b19d5e3255003074bc746ad5"
-dependencies = [
- "brdgme-cmd 0.1.0 (git+https://github.com/brdgme/cmd.git)",
- "brdgme-color 0.1.0 (git+https://github.com/brdgme/color.git)",
- "brdgme-std 0.1.0 (git+https://github.com/brdgme/std.git)",
- "chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "postgres 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "postgres-derive 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "r2d2 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "r2d2_postgres 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
- "uuid 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1310,7 +1294,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum bodyparser 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "07b171b407e583dc8f01011a713f20575a81ac60acecf3b8153012709aeb1fd6"
 "checksum brdgme-cmd 0.1.0 (git+https://github.com/brdgme/cmd.git)" = "<none>"
 "checksum brdgme-color 0.1.0 (git+https://github.com/brdgme/color.git)" = "<none>"
-"checksum brdgme-db 0.1.0 (git+https://github.com/brdgme/db.git)" = "<none>"
 "checksum brdgme-game 0.1.0 (git+https://github.com/brdgme/game.git)" = "<none>"
 "checksum brdgme-markup 0.1.0 (git+https://github.com/brdgme/markup.git)" = "<none>"
 "checksum brdgme-std 0.1.0 (git+https://github.com/brdgme/std.git)" = "<none>"

@@ -10,11 +10,11 @@ use hyper::net::HttpsConnector;
 use hyper_native_tls::NativeTlsClient;
 use serde_json;
 
-use brdgme_db::{query, models};
 use brdgme_cmd::cli;
 use brdgme_game::Status;
 
 use auth::authenticate;
+use db::{query, models};
 use errors::*;
 use CONN;
 

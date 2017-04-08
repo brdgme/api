@@ -5,12 +5,15 @@ authors = ["Michael Alexander <beefsack@gmail.com>"]
 
 [dependencies]
 brdgme-std = { git = "https://github.com/brdgme/std.git" }
-brdgme-db = { git = "https://github.com/brdgme/db.git" }
 brdgme-cmd = { git = "https://github.com/brdgme/cmd.git" }
 brdgme-game = { git = "https://github.com/brdgme/game.git" }
+brdgme-color = { git = "https://github.com/brdgme/color.git" }
 lazy_static = "*"
 error-chain = "*"
-postgres = { version = "*", features = ["with-uuid", "with-chrono"] }
+postgres = { version = "*", features = ["with-uuid", "with-chrono", "with-serde_json"] }
+postgres-derive = "*"
+r2d2 = "*"
+r2d2_postgres = "*"
 rand = "*"
 chrono = "*"
 lettre = "*"

@@ -8,7 +8,12 @@ extern crate email;
 extern crate lazy_static;
 #[macro_use]
 extern crate error_chain;
+#[macro_use]
 extern crate postgres;
+#[macro_use]
+extern crate postgres_derive;
+extern crate r2d2;
+extern crate r2d2_postgres;
 extern crate rand;
 extern crate chrono;
 extern crate lettre;
@@ -19,9 +24,9 @@ extern crate hyper;
 extern crate hyper_native_tls;
 extern crate serde_json;
 
-extern crate brdgme_db;
 extern crate brdgme_cmd;
 extern crate brdgme_game;
+extern crate brdgme_color;
 
 use rustless::{Application, Api, Nesting, Versioning, Response};
 use rustless::server::status::StatusCode;
@@ -29,16 +34,20 @@ use rustless::batteries::swagger;
 use rustless::errors::ErrorResponse;
 
 use std::default::Default;
+use std::env;
 
 mod config;
 mod auth;
 mod game;
 mod mail;
+mod db;
 
 mod errors {
     error_chain!{
-        links {
-            Db(::brdgme_db::errors::Error, ::brdgme_db::errors::ErrorKind);
+        foreign_links {
+            Postgres(::postgres::error::Error);
+            EnvVar(::std::env::VarError);
+            Chrono(::chrono::ParseError);
         }
 
         errors {
@@ -66,7 +75,7 @@ mod errors {
 use errors::*;
 
 lazy_static! {
-    pub static ref CONN: brdgme_db::Connections = brdgme_db::connect_env().unwrap();
+    pub static ref CONN: db::Connections = db::connect_env().unwrap();
 }
 
 fn main() {

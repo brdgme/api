@@ -9,7 +9,7 @@ use lettre::email::EmailBuilder;
 use uuid::Uuid;
 use postgres::GenericConnection;
 
-use brdgme_db::query;
+use db::query;
 
 use std::{error, fmt};
 
