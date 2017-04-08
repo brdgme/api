@@ -66,28 +66,28 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
                                              .into()
                                  })?;
     let opponent_ids: Vec<Uuid> = match params.find("opponent_ids") {
-        Some(ref v) => {
+        Some(v) => {
             v.as_array()
                 .unwrap()
                 .iter()
                 // TODO handle `parse_str` failures as error instead of panicking.
-                .map(|ref e| Uuid::parse_str(e.as_str().unwrap()).unwrap())
+                .map(|e| Uuid::parse_str(e.as_str().unwrap()).unwrap())
                 .collect()
         }
         None => vec![],
     };
     let opponent_emails: Vec<String> = match params.find("opponent_emails") {
-        Some(ref v) => {
+        Some(v) => {
             v.as_array()
                 .unwrap()
                 .iter()
-                .map(|ref e| e.as_str().unwrap().to_owned())
+                .map(|e| e.as_str().unwrap().to_owned())
                 .collect()
         }
         None => vec![],
     };
 
-    let ref conn = *CONN.w.get().chain_err(|| "unable to get connection")?;
+    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
     let ube = authenticate(&client, conn)?;
     let player_count: usize = 1 + opponent_ids.len() + opponent_emails.len();
 
@@ -110,19 +110,22 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
         } => (false, whose_turn, eliminated, vec![]),
         Status::Finished { winners } => (true, vec![], vec![], winners),
     };
-    let created_game = query::create_game_with_users(&models::NewGame {
+    let created_game =
+        query::create_game_with_users(&query::CreateGameOpts {
+                                           new_game: &models::NewGame {
                                                           game_version_id: &game_version_id,
                                                           is_finished: is_finished,
                                                           game_state: &game_info.state,
                                                       },
-                                                     &whose_turn,
-                                                     &eliminated,
-                                                     &winners,
-                                                     &ube.user.id,
-                                                     &opponent_ids,
-                                                     &opponent_emails,
-                                                     &trans)
-            .chain_err(|| "unable to create game")?;
+                                           whose_turn: &whose_turn,
+                                           eliminated: &eliminated,
+                                           winners: &winners,
+                                           creator_id: &ube.user.id,
+                                           opponent_ids: &opponent_ids,
+                                           opponent_emails: &opponent_emails,
+                                       },
+                                      &trans)
+                .chain_err(|| "unable to create game")?;
     let created_logs = query::create_game_logs_from_cli(&created_game.game.id, logs, &trans)
         .chain_err(|| "unable to create game logs")?;
 

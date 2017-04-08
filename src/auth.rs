@@ -59,7 +59,7 @@ pub fn namespace(ns: &mut Namespace) {
 
 pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
     let create_email = params.find("email").unwrap().as_str().unwrap();
-    let ref conn = *CONN.w.get().chain_err(|| "unable to get connection")?;
+    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
     let confirmation = query::user_login_request(create_email, conn)
         .chain_err(|| "unable to request user login")?;
 
@@ -81,7 +81,7 @@ This confirmation will expire in 30 minutes if not used.",
 pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
     let email = params.find("email").unwrap().as_str().unwrap();
     let confirmation = params.find("confirmation").unwrap().as_str().unwrap();
-    let ref conn = *CONN.w.get().chain_err(|| "unable to get connection")?;
+    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
     match query::user_login_confirm(email, confirmation, conn)
               .chain_err(|| "unable to confirm login")? {
@@ -93,23 +93,26 @@ pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
 pub fn authenticate<'a>(client: &Client<'a>,
                         conn: &GenericConnection)
                         -> HandleResult<query::UserByEmail> {
-    let auth_header = &client
-                           .request
-                           .headers()
-                           .get::<header::Authorization<header::Basic>>()
-                           .ok_or::<Error>("unable to get Authorization header".into())?;
+    let auth_header =
+        &client
+             .request
+             .headers()
+             .get::<header::Authorization<header::Basic>>()
+             .ok_or_else::<Error, _>(|| "unable to get Authorization header".into())?;
     let email = auth_header.username.to_owned();
-    let password =
-        auth_header
-            .password
-            .to_owned()
-            .ok_or::<Error>(ErrorKind::UserError("password not specified".to_string()).into())?;
+    let password = auth_header
+        .password
+        .to_owned()
+        .ok_or_else::<Error, _>(|| {
+                                    ErrorKind::UserError("password not specified".to_string())
+                                        .into()
+                                })?;
     Ok(query::authenticate(&email,
                            &Uuid::parse_str(&password)
                                 .map_err::<ErrorResponse, _>(|_| UnauthorizedError {}.into())?,
                            conn)
                .chain_err(|| "unable to authenticate")?
-               .ok_or::<ErrorResponse>(UnauthorizedError {}.into())?)
+               .ok_or_else::<ErrorResponse, _>(|| UnauthorizedError {}.into())?)
 
 }
 

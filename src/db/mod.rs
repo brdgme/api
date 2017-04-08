@@ -23,7 +23,7 @@ pub fn connect_env() -> Result<Connections> {
     let w_addr = env::var("DATABASE_URL")
         .chain_err(|| "DATABASE_URL not set")?;
     connect(&w_addr,
-            &env::var("DATABASE_URL_R").unwrap_or(w_addr.to_owned()))
+            &env::var("DATABASE_URL_R").unwrap_or_else(|_| w_addr.to_owned()))
 }
 
 fn conn(addr: &str) -> Result<r2d2::Pool<PostgresConnectionManager>> {

@@ -229,21 +229,24 @@ pub struct CreatedGame {
     pub players: Vec<GamePlayer>,
 }
 
-pub fn create_game_with_users(new_game: &NewGame,
-                              whose_turn: &[usize],
-                              eliminated: &[usize],
-                              winners: &[usize],
-                              creator_id: &Uuid,
-                              opponent_ids: &[Uuid],
-                              opponent_emails: &[String],
+pub struct CreateGameOpts<'a> {
+    pub new_game: &'a NewGame<'a>,
+    pub whose_turn: &'a [usize],
+    pub eliminated: &'a [usize],
+    pub winners: &'a [usize],
+    pub creator_id: &'a Uuid,
+    pub opponent_ids: &'a [Uuid],
+    pub opponent_emails: &'a [String],
+}
+pub fn create_game_with_users(opts: &CreateGameOpts,
                               conn: &GenericConnection)
                               -> Result<CreatedGame> {
     let trans = conn.transaction()?;
     // Find or create users.
-    let creator = find_user(creator_id, &trans)
+    let creator = find_user(opts.creator_id, &trans)
         .chain_err(|| "could not find creator")?
         .ok_or_else::<Error, _>(|| "could not find creator".into())?;
-    let opponents = create_game_users(opponent_ids, opponent_emails, &trans)
+    let opponents = create_game_users(opts.opponent_ids, opts.opponent_emails, &trans)
         .chain_err(|| "could not create game users")?;
     let mut users: Vec<User> = opponents.iter().map(|o| o.user.clone()).collect();
     users.push(creator);
@@ -257,21 +260,21 @@ pub fn create_game_with_users(new_game: &NewGame,
     let player_colors = color::choose(&HashSet::from_iter(color::COLORS.iter()), &color_prefs);
 
     // Create game record.
-    let game = create_game(new_game, &trans)
+    let game = create_game(opts.new_game, &trans)
         .chain_err(|| "could not create new game")?;
 
     // Create a player record for each user.
     let mut players: Vec<GamePlayer> = vec![];
-    for (pos, ref user) in users.iter().enumerate() {
+    for (pos, user) in users.iter().enumerate() {
         players.push(create_game_player(&NewGamePlayer {
                                              game_id: &game.id,
                                              user_id: &user.id,
                                              position: pos as i32,
                                              color: &player_colors[pos],
-                                             has_accepted: &user.id == creator_id,
-                                             is_turn: whose_turn.contains(&pos),
-                                             is_eliminated: eliminated.contains(&pos),
-                                             is_winner: winners.contains(&pos),
+                                             has_accepted: user.id == *opts.creator_id,
+                                             is_turn: opts.whose_turn.contains(&pos),
+                                             is_eliminated: opts.eliminated.contains(&pos),
+                                             is_winner: opts.winners.contains(&pos),
                                          },
                                         &trans)
                              .chain_err(|| "could not create game player")?);

@@ -66,7 +66,7 @@ pub fn choose(available: &HashSet<&Color>, prefs: &[Vec<Color>]) -> Vec<Color> {
         .collect::<Vec<LocPref>>();
     rng.shuffle(&mut rem_prefs);
     'outer: loop {
-        'inner: for &(pos, ref pref) in rem_prefs.clone().iter() {
+        'inner: for &(pos, ref pref) in &rem_prefs.clone() {
             if assigned.contains_key(&pos) || pref.is_empty() {
                 continue 'inner;
             }

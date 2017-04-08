@@ -38,7 +38,7 @@ pub fn handle_inbound_email(e: &str) {
 
 fn extract_bodies(mm: &MimeMessage) -> Vec<String> {
     let mut bodies: Vec<String> = vec![mm.body.clone()];
-    for c in mm.children.iter() {
+    for c in &mm.children {
         bodies.extend(extract_bodies(c));
     }
     bodies
@@ -50,18 +50,18 @@ pub fn html_layout(content: &str) -> String {
 }
 
 pub fn send<T: SendableEmail>(email: T) -> Result<()> {
-    match &CONFIG.mail {
-        &Mail::File => {
+    match CONFIG.mail {
+        Mail::File => {
             FileEmailTransport::new(temp_dir())
                 .send(email)
                 .map(|_| ())
                 .chain_err(|| "unable to send email")
         }
-        &Mail::Smtp {
-             ref addr,
-             ref user,
-             ref pass,
-         } => {
+        Mail::Smtp {
+            ref addr,
+            ref user,
+            ref pass,
+        } => {
             SmtpTransportBuilder::new((addr.as_ref(), SUBMISSION_PORT))
                 .chain_err(|| "could not initialise SMTP transport")?
                 .encrypt()
