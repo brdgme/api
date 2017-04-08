@@ -103,23 +103,17 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
         cli::Response::New { game, logs } => (game, logs),
         _ => bail!(err_resp("expected cli::Response::New")),
     };
-    let (is_finished, whose_turn, eliminated, winners) = match game_info.status {
-        Status::Active {
-            whose_turn,
-            eliminated,
-        } => (false, whose_turn, eliminated, vec![]),
-        Status::Finished { winners } => (true, vec![], vec![], winners),
-    };
+    let status = game_status_values(&game_info.status);
     let created_game =
         query::create_game_with_users(&query::CreateGameOpts {
                                            new_game: &models::NewGame {
                                                           game_version_id: &game_version_id,
-                                                          is_finished: is_finished,
+                                                          is_finished: status.is_finished,
                                                           game_state: &game_info.state,
                                                       },
-                                           whose_turn: &whose_turn,
-                                           eliminated: &eliminated,
-                                           winners: &winners,
+                                           whose_turn: &status.whose_turn,
+                                           eliminated: &status.eliminated,
+                                           winners: &status.winners,
                                            creator_id: &ube.user.id,
                                            opponent_ids: &opponent_ids,
                                            opponent_emails: &opponent_emails,
@@ -133,22 +127,45 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
         .commit()
         .chain_err(|| "error committing transaction")?;
 
-    client.json(&created_game.game.game_state.to_json())
+    client.json(&created_game.game.id.to_string().to_json())
+}
+
+struct StatusValues {
+    is_finished: bool,
+    whose_turn: Vec<usize>,
+    eliminated: Vec<usize>,
+    winners: Vec<usize>,
+}
+fn game_status_values(status: &Status) -> StatusValues {
+
+    let (is_finished, whose_turn, eliminated, winners) = match *status {
+        Status::Active {
+            ref whose_turn,
+            ref eliminated,
+        } => (false, whose_turn.clone(), eliminated.clone(), vec![]),
+        Status::Finished { ref winners } => (true, vec![], vec![], winners.clone()),
+    };
+    StatusValues {
+        is_finished: is_finished,
+        whose_turn: whose_turn,
+        eliminated: eliminated,
+        winners: winners,
+    }
 }
 
 fn game_request(uri: &str, request: &cli::Request) -> Result<cli::Response> {
-    // TODO handle error
-    let ssl = NativeTlsClient::new().unwrap();
+    let ssl = NativeTlsClient::new()
+        .chain_err(|| "unable to get native TLS client")?;
     let connector = HttpsConnector::new(ssl);
     let https = HttpClient::with_connector(connector);
     let res = https
         .post(uri)
-        // TODO handle error
-        .body(&serde_json::to_string(request).unwrap())
+        .body(&serde_json::to_string(request)
+                   .chain_err(|| "error converting request to JSON")?)
         .send()
         .chain_err(|| "error getting new game state")?;
     if res.status != hyper::Ok {
-        bail!("request failed");
+        bail!("game request failed");
     }
     match serde_json::from_reader::<_, cli::Response>(res)
               .chain_err(|| "error parsing JSON response")? {
@@ -163,5 +180,74 @@ pub fn show<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'
 }
 
 pub fn command<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
+    let id = Uuid::parse_str(params.find("id").unwrap().as_str().unwrap())
+        .map_err::<Error, _>(|_| {
+                                 ErrorKind::UserError("game_version_id is not a UUID".to_string())
+                                     .into()
+                             })?;
+    let cmd_text = params.find("command").unwrap().as_str().unwrap();
+
+    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+    let ube = authenticate(&client, conn)?;
+
+    let trans = conn.transaction()
+        .chain_err(|| "unable to start transaction")?;
+    let (game, game_version) =
+        query::find_game_with_version(&id, &trans)
+            .chain_err(|| "error finding game")?
+            .ok_or_else::<Error, _>(|| {
+                                        ErrorKind::UserError("game does not exist".to_string())
+                                            .into()
+                                    })?;
+    let players = query::find_game_players_with_user_by_game(&id, &trans)
+        .chain_err(|| "error finding game players")?;
+    let position = players
+        .iter()
+        .find(|p| p.user.id == ube.user.id)
+        .ok_or_else::<Error, _>(|| {
+                                    ErrorKind::UserError("you are not a player in this game"
+                                                             .to_string())
+                                            .into()
+                                })?
+        .game_player
+        .position;
+
+    let names = players
+        .iter()
+        .map(|p| p.user.name.clone())
+        .collect::<Vec<String>>();
+
+    let (game_response, logs, remaining_command) =
+        match game_request(&game_version.uri,
+                           &cli::Request::Play {
+                                player: position as usize,
+                                game: game.game_state,
+                                command: cmd_text.to_string(),
+                                names: names,
+                            })? {
+            cli::Response::Play {
+                game,
+                logs,
+                remaining_command,
+            } => (game, logs, remaining_command),
+            _ => bail!(err_resp("invalid response type")),
+        };
+    let status = game_status_values(&game_response.status);
+
+    let updated = query::update_game_and_players(&id,
+                                                 &models::NewGame {
+                                                      game_version_id: &game.game_version_id,
+                                                      is_finished: status.is_finished,
+                                                      game_state: &game_response.state,
+                                                  },
+                                                 &status.whose_turn,
+                                                 &status.eliminated,
+                                                 &status.winners,
+                                                 &trans)
+            .chain_err(|| "error updating game")?;
+    trans
+        .commit()
+        .chain_err(|| "error committing transaction")?;
+
     client.json(&params.to_json())
 }

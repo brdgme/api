@@ -45,7 +45,18 @@ fn extract_bodies(mm: &MimeMessage) -> Vec<String> {
 }
 
 pub fn html_layout(content: &str) -> String {
-    format!("<link href=\"https://fonts.googleapis.com/css?family=Source+Code+Pro\" rel=\"stylesheet\"><pre style=\"background-color: white; color: black; font-family: 'Source Code Pro', monospace;\">{}</pre>",
+    format!("
+        <link
+            href=\"https://fonts.googleapis.com/css?family=Source+Code+Pro\"
+            rel=\"stylesheet\"
+        >
+        <pre
+            style=\"
+                background-color: white;
+                color: black;
+                font-family: 'Source Code Pro', monospace;
+            \"
+        >{}</pre>",
             content)
 }
 

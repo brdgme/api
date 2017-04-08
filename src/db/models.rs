@@ -166,6 +166,19 @@ impl GameVersion {
     }
 }
 
+impl Model for GameVersion {
+    fn cols() -> Vec<String> {
+        vec!["id".to_string(),
+             "created_at".to_string(),
+             "updated_at".to_string(),
+             "game_type_id".to_string(),
+             "name".to_string(),
+             "uri".to_string(),
+             "is_public".to_string(),
+             "is_deprecated".to_string()]
+    }
+}
+
 pub struct NewGameVersion<'a> {
     pub game_type_id: &'a Uuid,
     pub name: &'a str,
@@ -193,6 +206,17 @@ impl Game {
             is_finished: row.get(format!("{}is_finished", prefix).as_ref()),
             game_state: row.get(format!("{}game_state", prefix).as_ref()),
         }
+    }
+}
+
+impl Model for Game {
+    fn cols() -> Vec<String> {
+        vec!["id".to_string(),
+             "created_at".to_string(),
+             "updated_at".to_string(),
+             "game_version_id".to_string(),
+             "is_finished".to_string(),
+             "game_state".to_string()]
     }
 }
 
@@ -231,6 +255,22 @@ impl GamePlayer {
             is_eliminated: row.get(format!("{}is_eliminated", prefix).as_ref()),
             is_winner: row.get(format!("{}is_winner", prefix).as_ref()),
         }
+    }
+}
+
+impl Model for GamePlayer {
+    fn cols() -> Vec<String> {
+        vec!["id".to_string(),
+             "created_at".to_string(),
+             "updated_at".to_string(),
+             "game_id".to_string(),
+             "user_id".to_string(),
+             "position".to_string(),
+             "color".to_string(),
+             "has_accepted".to_string(),
+             "is_turn".to_string(),
+             "is_eliminated".to_string(),
+             "is_winner".to_string()]
     }
 }
 

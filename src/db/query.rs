@@ -223,12 +223,30 @@ pub fn find_game_version(id: &Uuid, conn: &GenericConnection) -> Result<Option<G
     Ok(None)
 }
 
+pub fn find_game_with_version(id: &Uuid,
+                              conn: &GenericConnection)
+                              -> Result<Option<(Game, GameVersion)>> {
+    for row in &conn.query(&format!("
+        SELECT {}, {}
+        FROM games g
+        INNER JOIN game_versions gv
+        ON (g.game_version_id = gv.id)
+        WHERE g.id=$1
+        LIMIT 1
+    ",
+                                    Game::select_cols("g", "g_"),
+                                    GameVersion::select_cols("gv", "gv_")),
+                           &[id])? {
+        return Ok(Some((Game::from_row(&row, "g_"), GameVersion::from_row(&row, "gv_"))));
+    }
+    Ok(None)
+}
+
 pub struct CreatedGame {
     pub game: Game,
     pub opponents: Vec<UserByEmail>,
     pub players: Vec<GamePlayer>,
 }
-
 pub struct CreateGameOpts<'a> {
     pub new_game: &'a NewGame<'a>,
     pub whose_turn: &'a [usize],
@@ -331,7 +349,7 @@ pub fn update_game(id: &Uuid, update: &NewGame, conn: &GenericConnection) -> Res
 
 fn position_update_clause(positions: &[usize]) -> String {
     if positions.is_empty() {
-        "1".to_string()
+        "FALSE".to_string()
     } else {
         format!("(position IN ({}))",
                 positions
@@ -434,9 +452,36 @@ pub fn find_game_players_by_game(game_id: &Uuid,
     for row in &conn.query("
         SELECT *
         FROM game_players
-        WHERE game_id=$1",
+        WHERE game_id=$1
+        ORDER BY position",
                            &[game_id])? {
         players.push(GamePlayer::from_row(&row, ""));
+    }
+    Ok(players)
+}
+
+pub struct GamePlayerUser {
+    pub game_player: GamePlayer,
+    pub user: User,
+}
+pub fn find_game_players_with_user_by_game(game_id: &Uuid,
+                                           conn: &GenericConnection)
+                                           -> Result<Vec<GamePlayerUser>> {
+    let mut players: Vec<GamePlayerUser> = vec![];
+    for row in &conn.query(&format!("
+        SELECT {}, {}
+        FROM game_players gp
+        INNER JOIN users u
+        ON (gp.user_id = u.id)
+        WHERE gp.game_id=$1
+        ORDER BY gp.position",
+                                    GamePlayer::select_cols("gp", "gp_"),
+                                    User::select_cols("u", "u_")),
+                           &[game_id])? {
+        players.push(GamePlayerUser {
+                         game_player: GamePlayer::from_row(&row, "gp_"),
+                         user: User::from_row(&row, "u_"),
+                     });
     }
     Ok(players)
 }

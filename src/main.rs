@@ -1,5 +1,6 @@
 #![recursion_limit = "1024"]
 #![allow(dead_code)]
+#![allow(unused_variables)]
 
 extern crate rustless;
 extern crate iron;
