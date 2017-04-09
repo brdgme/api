@@ -136,6 +136,15 @@ impl GameType {
     }
 }
 
+impl Model for GameType {
+    fn cols() -> Vec<String> {
+        vec!["id".to_string(),
+             "created_at".to_string(),
+             "updated_at".to_string(),
+             "name".to_string()]
+    }
+}
+
 pub struct NewGameType<'a> {
     pub name: &'a str,
 }

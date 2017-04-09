@@ -734,6 +734,30 @@ pub fn create_game_player(player: &NewGamePlayer, conn: &GenericConnection) -> R
     Err("error creating game type".into())
 }
 
+pub struct GameGameVersion {
+    pub game_type: GameType,
+    pub game_version: GameVersion,
+}
+pub fn public_game_versions(conn: &GenericConnection) -> Result<Vec<GameGameVersion>> {
+    let mut ret = vec![];
+    for row in &conn.query(&format!("
+        SELECT {}, {}
+        FROM game_versions gv
+        INNER JOIN game_types gt
+        ON (gv.game_type_id = gt.id)
+        WHERE gv.is_public = TRUE
+        AND gv.is_deprecated = FALSE",
+                                    GameType::select_cols("gt", "gt_"),
+                                    GameVersion::select_cols("gv", "gv_")),
+                           &[])? {
+        ret.push(GameGameVersion {
+                     game_type: GameType::from_row(&row, "gt_"),
+                     game_version: GameVersion::from_row(&row, "gv_"),
+                 });
+    }
+    Ok(ret)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

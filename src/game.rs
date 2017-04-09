@@ -13,6 +13,8 @@ use serde_json;
 use brdgme_cmd::cli;
 use brdgme_game::Status;
 
+use std::collections::BTreeMap;
+
 use auth::authenticate;
 use db::{query, models};
 use errors::*;
@@ -33,6 +35,10 @@ pub fn namespace(ns: &mut Namespace) {
                                              json_dsl::array_of(json_dsl::string()));
                         });
         endpoint.handle(create)
+    });
+    ns.get("version/public", |endpoint| {
+        endpoint.desc("Public game versions");
+        endpoint.handle(version_public)
     });
     ns.get(":id", |endpoint| {
         endpoint.desc("Show game");
@@ -250,4 +256,24 @@ pub fn command<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
         .chain_err(|| "error committing transaction")?;
 
     client.json(&params.to_json())
+}
+
+pub fn version_public<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
+    let conn = &*CONN.r.get().chain_err(|| "unable to get connection")?;
+
+    client.json(&JsonValue::Array(query::public_game_versions(conn)
+                                      .chain_err(|| "error getting public game versions")?
+                                      .iter()
+                                      .map(|gv| {
+        JsonValue::Object({
+                              let mut props = BTreeMap::new();
+                              props.insert("game_version_id".to_string(),
+                                           JsonValue::String(gv.game_version.id.to_string()));
+                              props.insert("name".to_string(),
+                                           JsonValue::String(gv.game_type.name.to_owned()));
+                              props
+                          })
+    })
+                                      .collect::<Vec<JsonValue>>())
+                         .to_json())
 }
