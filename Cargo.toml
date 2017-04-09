@@ -4,26 +4,25 @@ version = "0.1.0"
 authors = ["Michael Alexander <beefsack@gmail.com>"]
 
 [dependencies]
-brdgme-std = { git = "https://github.com/brdgme/std.git" }
 brdgme-cmd = { git = "https://github.com/brdgme/cmd.git" }
 brdgme-game = { git = "https://github.com/brdgme/game.git" }
 brdgme-color = { git = "https://github.com/brdgme/color.git" }
-lazy_static = "*"
-error-chain = "*"
-postgres = { version = "*", features = ["with-uuid", "with-chrono", "with-serde_json"] }
-postgres-derive = "*"
-r2d2 = "*"
-r2d2_postgres = "*"
-rand = "*"
-chrono = "*"
-lettre = "*"
-log = "*"
-env_logger = "*"
-uuid = { version = "*", features = ["serde"] }
-serde_json = "*"
+lazy_static = "0.2.6"
+error-chain = "0.10.0"
+postgres = { version = "0.14.0", features = ["with-uuid", "with-chrono", "with-serde_json"] }
+postgres-derive = "0.3.1"
+r2d2 = "0.7.1"
+r2d2_postgres = "0.12.0"
+rand = "0.3.15"
+chrono = "0.3.0"
+lettre = "0.6.2"
+log = "0.3.7"
+env_logger = "0.4.2"
+uuid = { version = "0.4.0", features = ["serde"] }
+serde_json = "0.9.9"
 rustless = "0.10.0"
 iron = "0.4.0"
 valico = "1.0.1"
 email = "0.0.16"
-hyper = "0.10.6"
+hyper = "0.10.7"
 hyper-native-tls = "0.2.2"
