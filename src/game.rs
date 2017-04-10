@@ -251,6 +251,10 @@ pub fn command<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
                                                  &status.winners,
                                                  &trans)
             .chain_err(|| "error updating game")?;
+
+    let created_logs = query::create_game_logs_from_cli(&id, logs, &trans)
+        .chain_err(|| "unable to create game logs")?;
+
     trans
         .commit()
         .chain_err(|| "error committing transaction")?;
