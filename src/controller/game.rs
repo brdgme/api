@@ -15,10 +15,10 @@ use brdgme_game::Status;
 
 use std::collections::BTreeMap;
 
-use auth::authenticate;
+use controller::auth::authenticate;
 use db::{query, models};
 use errors::*;
-use CONN;
+use db::CONN;
 
 pub fn namespace(ns: &mut Namespace) {
     ns.get("", |endpoint| {

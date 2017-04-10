@@ -30,18 +30,12 @@ extern crate brdgme_cmd;
 extern crate brdgme_game;
 extern crate brdgme_color;
 
-use rustless::{Application, Api, Nesting, Versioning, Response};
-use rustless::server::status::StatusCode;
-use rustless::batteries::swagger;
-use rustless::errors::ErrorResponse;
-
-use std::default::Default;
+use rustless::ErrorResponse;
 
 mod config;
-mod auth;
-mod game;
-mod mail;
+mod controller;
 mod db;
+mod mail;
 
 mod errors {
     error_chain!{
@@ -73,44 +67,10 @@ mod errors {
         err.into()
     }
 }
-use errors::*;
-
-lazy_static! {
-    pub static ref CONN: db::Connections = db::connect_env().unwrap();
-}
 
 fn main() {
     env_logger::init().unwrap();
-    let api = Api::build(|api| {
-        api.prefix("api");
-        api.mount(swagger::create_api("docs"));
-        api.mount(Api::build(|v1| {
-                                 v1.version("v1", Versioning::Path);
-                                 v1.namespace("auth", auth::namespace);
-                                 v1.namespace("game", game::namespace);
-                                 v1.namespace("mail", mail::namespace);
-                             }));
-        api.error_formatter(|err, _media| match err.downcast::<auth::UnauthorizedError>() {
-                                Some(_) => Some(Response::new(StatusCode::Unauthorized)),
-                                None => None,
-                            });
-        api.error_formatter(|err, _media| match err.downcast::<Error>() {
-                                Some(&Error(ErrorKind::UserError(ref message), _)) => {
-                                    Some(Response::from(StatusCode::BadRequest,
-                                                        Box::new(message.to_owned())))
-                                }
-                                _ => None,
-                            });
-    });
-    let mut app = Application::new(api);
-    swagger::enable(&mut app,
-                    swagger::Spec {
-                        info: swagger::Info {
-                            title: "brdg.me API".to_string(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    });
-
-    iron::Iron::new(app).http("0.0.0.0:8000").unwrap();
+    iron::Iron::new(controller::app())
+        .http("0.0.0.0:8000")
+        .unwrap();
 }

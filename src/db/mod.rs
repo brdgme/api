@@ -7,6 +7,10 @@ use r2d2_postgres::{TlsMode, PostgresConnectionManager};
 use std::env;
 use errors::*;
 
+lazy_static! {
+    pub static ref CONN: Connections = connect_env().unwrap();
+}
+
 pub struct Connections {
     pub w: r2d2::Pool<PostgresConnectionManager>,
     pub r: r2d2::Pool<PostgresConnectionManager>,

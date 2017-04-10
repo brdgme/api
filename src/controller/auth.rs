@@ -14,7 +14,7 @@ use db::query;
 use std::{error, fmt};
 
 use errors::*;
-use CONN;
+use db::CONN;
 use mail;
 
 #[derive(Debug)]
