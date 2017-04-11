@@ -41,6 +41,10 @@ pub fn namespace(ns: &mut Namespace) {
         endpoint.desc("Public game versions");
         endpoint.handle(version_public)
     });
+    ns.get("my_active", |endpoint| {
+        endpoint.desc("My active games");
+        endpoint.handle(my_active)
+    });
     ns.get(":id", |endpoint| {
         endpoint.desc("Show game");
         endpoint.params(|params| { params.req_typed("id", json_dsl::string()); });
@@ -281,19 +285,49 @@ pub fn version_public<'a>(client: Client<'a>, params: &JsonValue) -> HandleResul
                          .to_json())
 }
 
-pub fn my_recent<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
+pub fn my_active<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
     let conn = &*CONN.r.get().chain_err(|| "unable to get connection")?;
 
-    client.json(&JsonValue::Array(query::public_game_versions(conn)
-                                      .chain_err(|| "error getting public game versions")?
+    let (_, user) = authenticate(&client, conn)?;
+
+    client.json(&JsonValue::Array(query::find_active_games_for_user(&user.id, conn)
+                                      .chain_err(|| "error getting active_games")?
                                       .iter()
-                                      .map(|&(ref game_version, ref game_type)| {
+                                      .map(|game_extended| {
         JsonValue::Object({
                               let mut props = BTreeMap::new();
+                              props.insert("game_id".to_string(),
+                                           JsonValue::String(game_extended.game.id.to_string()));
                               props.insert("game_version_id".to_string(),
-                                           JsonValue::String(game_version.id.to_string()));
+                                           JsonValue::String(game_extended
+                                                                 .game_version
+                                                                 .id
+                                                                 .to_string()));
                               props.insert("name".to_string(),
-                                           JsonValue::String(game_type.name.to_owned()));
+                                           JsonValue::String(game_extended
+                                                                 .game_type
+                                                                 .name
+                                                                 .to_owned()));
+                              props.insert("is_finished".to_string(),
+                                           JsonValue::Bool(game_extended.game.is_finished));
+                              props.insert("game_players".to_string(),
+                            JsonValue::Array(game_extended.game_players.iter()
+                            .map(|&(ref game_player, ref user)| JsonValue::Object({
+                                let mut props = BTreeMap::new();
+                                props.insert("name".to_string(),
+                                    JsonValue::String(user.name.to_owned()));
+                                props.insert("color".to_string(),
+                                    JsonValue::String(game_player.color.to_owned()));
+                                props.insert("is_winner".to_string(),
+                                    JsonValue::Bool(game_player.is_winner));
+                                props.insert("is_turn".to_string(),
+                                    JsonValue::Bool(game_player.is_turn));
+                                props.insert("is_eliminated".to_string(),
+                                    JsonValue::Bool(game_player.is_eliminated));
+                                props
+                            })
+
+                            ).collect::<Vec<JsonValue>>()));
                               props
                           })
     })

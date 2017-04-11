@@ -192,10 +192,10 @@ pub fn find_game_with_version(id: &Uuid,
 }
 
 pub struct GameExtended {
-    game: Game,
-    game_type: GameType,
-    game_version: GameVersion,
-    game_players: Vec<(GamePlayer, User)>,
+    pub game: Game,
+    pub game_type: GameType,
+    pub game_version: GameVersion,
+    pub game_players: Vec<(GamePlayer, User)>,
 }
 pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<GameExtended>> {
     use db::schema::{games, game_players, game_versions, game_types};
