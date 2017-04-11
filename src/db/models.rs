@@ -26,7 +26,7 @@ pub struct NewUser<'a> {
     pub login_confirmation_at: Option<NaiveDateTime>,
 }
 
-#[derive(Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[belongs_to(User)]
 pub struct UserEmail {
     pub id: Uuid,
@@ -45,7 +45,7 @@ pub struct NewUserEmail<'a> {
     pub is_primary: bool,
 }
 
-#[derive(Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[belongs_to(User)]
 pub struct UserAuthToken {
     pub id: Uuid,
@@ -60,7 +60,7 @@ pub struct NewUserAuthToken {
     pub user_id: Uuid,
 }
 
-#[derive(Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[has_many(game_versions)]
 pub struct GameType {
     pub id: Uuid,
@@ -75,7 +75,7 @@ pub struct NewGameType<'a> {
     pub name: &'a str,
 }
 
-#[derive(Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[belongs_to(GameType)]
 #[has_many(games)]
 pub struct GameVersion {
@@ -99,7 +99,7 @@ pub struct NewGameVersion<'a> {
     pub is_deprecated: bool,
 }
 
-#[derive(Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[belongs_to(GameVersion)]
 #[has_many(game_players)]
 #[has_many(game_logs)]
@@ -120,7 +120,7 @@ pub struct NewGame<'a> {
     pub game_state: &'a str,
 }
 
-#[derive(Queryable, Clone, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[belongs_to(Game)]
 #[belongs_to(User)]
 #[has_many(game_log_targets)]
@@ -153,7 +153,7 @@ pub struct NewGamePlayer<'a> {
     pub is_read: bool,
 }
 
-#[derive(Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[belongs_to(Game)]
 #[has_many(game_log_targets)]
 pub struct GameLog {
@@ -175,7 +175,7 @@ pub struct NewGameLog<'a> {
     pub logged_at: NaiveDateTime,
 }
 
-#[derive(Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[belongs_to(GameLog)]
 #[belongs_to(GamePlayer)]
 pub struct GameLogTarget {

@@ -17,6 +17,7 @@ use db::color::{self, Color};
 lazy_static! {
     static ref CONFIRMATION_EXPIRY: Duration = Duration::minutes(30);
     static ref TOKEN_EXPIRY: Duration = Duration::days(30);
+    static ref FINISHED_GAME_RELEVANCE: Duration = Duration::days(3);
 }
 
 pub fn create_user_by_name(name: &str, conn: &PgConnection) -> Result<User> {
@@ -191,47 +192,42 @@ pub fn find_game_with_version(id: &Uuid,
 }
 
 pub struct GameExtended {
-    pub game: Game,
-    pub game_type: GameType,
-    pub game_version: GameVersion,
-    pub game_players: Vec<GamePlayerWithUser>,
-}
-pub struct GamePlayerWithUser {
-    pub game_player: GamePlayer,
-    pub user: User,
+    game: Game,
+    game_type: GameType,
+    game_version: GameVersion,
+    game_players: Vec<(GamePlayer, User)>,
 }
 pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<GameExtended>> {
-    /*
-    for row in &conn.query(&format!("
-        SELECT {}, {}, {}
-        FROM games g
-        INNER JOIN game_versions gv
-        ON (g.game_version_id = gv.id)
-        INNER JOIN game_types gt
-        ON (gv.game_type_id = gt.id)
-        INNER JOIN game_players gp
-        ON (gp.game_id = g.id)
-        INNER JOIN users u
-        ON (gp.user_id = u.id)
-        WHERE u.id=$1
-        AND (
-            g.is_finished = FALSE
-            OR (
-                g.updated_at > now() AT TIME ZONE 'utc' - INTERVAL '3 days'
-                AND gp.is_read = FALSE
-            )
-        )
-        LIMIT 1
-    ",
-                                    Game::select_cols("g", "g_"),
-                                    GameVersion::select_cols("gv", "gv_"),
-                                    GameType::select_cols("gt", "gt_")),
-                           &[id])? {
-        return Ok(vec![]);
-    }
-    Ok(vec![])
-    */
-    unimplemented!()
+    use db::schema::{games, game_players, game_versions, game_types};
+
+    Ok(games::table
+           .inner_join(game_players::table)
+           .filter(game_players::user_id.eq(id))
+           .filter(games::is_finished
+                       .eq(false)
+                       .or(games::updated_at
+                               .gt(UTC::now().naive_utc() - *FINISHED_GAME_RELEVANCE)
+                               .and(game_players::is_read.eq(false))))
+           .get_results::<(Game, GamePlayer)>(conn)?
+           .iter()
+           .map(|&(ref game, _)| {
+        let game_version: GameVersion = game_versions::table
+            .find(game.game_version_id)
+            .get_result(conn)
+            .unwrap();
+        let game_type: GameType = game_types::table
+            .find(game_version.game_type_id)
+            .get_result(conn)
+            .unwrap();
+        let players = find_game_players_with_user_by_game(&game.id, conn).unwrap();
+        GameExtended {
+            game: game.clone(),
+            game_type: game_type,
+            game_version: game_version,
+            game_players: players,
+        }
+    })
+           .collect())
 }
 
 pub struct CreatedGame {
