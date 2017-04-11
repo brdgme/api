@@ -98,6 +98,6 @@ table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         game_log_id -> Uuid,
-        player_id -> Uuid,
+        game_player_id -> Uuid,
     }
 }

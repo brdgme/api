@@ -497,7 +497,7 @@ pub fn create_game_log_targets(log_id: &Uuid,
         for id in player_ids {
             created.push(create_game_log_target(&NewGameLogTarget {
                                                      game_log_id: *log_id,
-                                                     player_id: *id,
+                                                     game_player_id: *id,
                                                  },
                                                 conn)?);
         }
