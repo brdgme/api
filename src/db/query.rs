@@ -11,18 +11,12 @@ use std::collections::{HashSet, HashMap};
 use std::iter::FromIterator;
 
 use errors::*;
-use db;
 use db::models::*;
 use db::color::{self, Color};
 
 lazy_static! {
     static ref CONFIRMATION_EXPIRY: Duration = Duration::minutes(30);
     static ref TOKEN_EXPIRY: Duration = Duration::days(30);
-}
-
-pub struct UserByEmail {
-    pub user: User,
-    pub user_email: UserEmail,
 }
 
 pub fn create_user_by_name(name: &str, conn: &PgConnection) -> Result<User> {
@@ -39,42 +33,37 @@ pub fn create_user_by_name(name: &str, conn: &PgConnection) -> Result<User> {
 }
 
 pub fn find_user(find_id: &Uuid, conn: &PgConnection) -> Result<Option<User>> {
-    use db::schema::users::dsl::*;
+    use db::schema::users;
 
-    users
+    users::table
         .find(find_id)
         .first(conn)
         .optional()
         .chain_err(|| "error finding user")
 }
 
-pub fn find_user_by_email(by_email: &str, conn: &PgConnection) -> Result<Option<UserByEmail>> {
-    use db::schema::user_emails::dsl::*;
-    use db::schema::users::dsl::*;
+pub fn find_user_by_email(by_email: &str,
+                          conn: &PgConnection)
+                          -> Result<Option<(UserEmail, User)>> {
+    use db::schema::{user_emails, users};
 
-    let ue = match user_emails
-              .filter(email.eq(by_email))
-              .limit(1)
-              .first::<UserEmail>(conn)
-              .optional()? {
-        Some(v) => v,
-        None => return Ok(None),
-    };
-    let u = users.find(ue.user_id).first::<User>(conn)?;
-    Ok(Some(UserByEmail {
-                user: u,
-                user_email: ue,
-            }))
+    user_emails::table
+        .filter(user_emails::email.eq(by_email))
+        .limit(1)
+        .inner_join(users::table)
+        .first::<(UserEmail, User)>(conn)
+        .optional()
+        .chain_err(|| "error finding user")
 }
 
-pub fn find_or_create_user_by_email(email: &str, conn: &PgConnection) -> Result<UserByEmail> {
-    if let Some(u) = find_user_by_email(email, conn)? {
-        return Ok(u);
+pub fn find_or_create_user_by_email(email: &str, conn: &PgConnection) -> Result<(UserEmail, User)> {
+    if let Some(v) = find_user_by_email(email, conn)? {
+        return Ok(v);
     }
     create_user_by_email(email, conn)
 }
 
-pub fn create_user_by_email(email: &str, conn: &PgConnection) -> Result<UserByEmail> {
+pub fn create_user_by_email(email: &str, conn: &PgConnection) -> Result<(UserEmail, User)> {
     conn.transaction(|| {
         let u = create_user_by_name(email, conn)?;
         let ue = create_user_email(&NewUserEmail {
@@ -83,10 +72,7 @@ pub fn create_user_by_email(email: &str, conn: &PgConnection) -> Result<UserByEm
                                         is_primary: true,
                                     },
                                    conn)?;
-        Ok(UserByEmail {
-               user: u,
-               user_email: ue,
-           })
+        Ok((ue, u))
     })
 }
 
@@ -106,18 +92,19 @@ fn rand_code() -> String {
 }
 
 pub fn generate_user_login_confirmation(user_id: &Uuid, conn: &PgConnection) -> Result<String> {
-    use db::schema::users::dsl::*;
+    use db::schema::users;
 
     let code = rand_code();
-    diesel::update(users.find(user_id))
-        .set((login_confirmation.eq(&code), login_confirmation_at.eq(UTC::now().naive_utc())))
+    diesel::update(users::table.find(user_id))
+        .set((users::login_confirmation.eq(&code),
+              users::login_confirmation_at.eq(UTC::now().naive_utc())))
         .execute(conn)?;
     Ok(code)
 }
 
 pub fn user_login_request(email: &str, conn: &PgConnection) -> Result<String> {
     conn.transaction(|| {
-        let user = find_or_create_user_by_email(email, conn)?.user;
+        let (_, user) = find_or_create_user_by_email(email, conn)?;
 
         let confirmation = match (user.login_confirmation, user.login_confirmation_at) {
             (Some(ref uc), Some(at)) if at + *CONFIRMATION_EXPIRY > UTC::now().naive_utc() => {
@@ -134,7 +121,7 @@ pub fn user_login_confirm(email: &str,
                           conn: &PgConnection)
                           -> Result<Option<UserAuthToken>> {
     let user = match find_user_by_email(email, conn)? {
-        Some(ube) => ube.user,
+        Some((_, u)) => u,
         None => return Ok(None),
     };
     Ok(match (user.login_confirmation, user.login_confirmation_at) {
@@ -158,56 +145,49 @@ pub fn create_auth_token(for_user_id: &Uuid, conn: &PgConnection) -> Result<User
 pub fn authenticate(search_email: &str,
                     search_token: &Uuid,
                     conn: &PgConnection)
-                    -> Result<Option<UserByEmail>> {
-    use db::schema::users::dsl::*;
-    use db::schema::user_emails::dsl::*;
-    use db::schema::user_auth_tokens::dsl::*;
+                    -> Result<Option<(UserEmail, User)>> {
+    use db::schema::{users, user_emails, user_auth_tokens};
 
-    let uat: UserAuthToken = match user_auth_tokens
+    let uat: UserAuthToken = match user_auth_tokens::table
               .find(search_token)
-              .filter(db::schema::user_auth_tokens::dsl::created_at.gt(UTC::now().naive_utc() -
-                                                                       *TOKEN_EXPIRY))
+              .filter(user_auth_tokens::created_at.gt(UTC::now().naive_utc() -
+                                                      *TOKEN_EXPIRY))
               .first(conn)
               .optional()? {
         Some(v) => v,
         None => return Ok(None),
     };
-    let ue: UserEmail = match user_emails
-              .filter(email.eq(search_email))
-              .filter(db::schema::user_emails::dsl::user_id.eq(uat.user_id))
-              .first(conn)
-              .optional()? {
-        Some(v) => v,
-        None => return Ok(None),
-    };
-    Ok(Some(UserByEmail {
-                user: users.find(ue.user_id).first(conn)?,
-                user_email: ue,
-            }))
+
+    user_emails::table
+        .filter(user_emails::email.eq(search_email))
+        .filter(user_emails::user_id.eq(uat.user_id))
+        .inner_join(users::table)
+        .first(conn)
+        .optional()
+        .chain_err(|| "error finding user")
 }
 
 pub fn find_game_version(id: &Uuid, conn: &PgConnection) -> Result<Option<GameVersion>> {
-    use db::schema::game_versions::dsl::*;
+    use db::schema::game_versions;
 
-    game_versions
+    game_versions::table
         .find(id)
         .first(conn)
         .optional()
         .chain_err(|| "error finding game version")
 }
 
-pub fn find_game_with_version(search_id: &Uuid,
+pub fn find_game_with_version(id: &Uuid,
                               conn: &PgConnection)
                               -> Result<Option<(Game, GameVersion)>> {
-    use db::schema::games::dsl::*;
-    use db::schema::game_versions::dsl::*;
+    use db::schema::{games, game_versions};
 
-    let g: Game = match games.find(search_id).first(conn).optional()? {
-        Some(v) => v,
-        None => return Ok(None),
-    };
-    let gv_id = g.game_version_id;
-    Ok(Some((g, game_versions.find(gv_id).first(conn)?)))
+    games::table
+        .find(id)
+        .inner_join(game_versions::table)
+        .first(conn)
+        .optional()
+        .chain_err(|| "error finding game")
 }
 
 pub struct GameExtended {
@@ -256,7 +236,7 @@ pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<
 
 pub struct CreatedGame {
     pub game: Game,
-    pub opponents: Vec<UserByEmail>,
+    pub opponents: Vec<(UserEmail, User)>,
     pub players: Vec<GamePlayer>,
 }
 pub struct CreateGameOpts<'a> {
@@ -277,7 +257,7 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
             .ok_or_else::<Error, _>(|| "could not find creator".into())?;
         let opponents = create_game_users(opts.opponent_ids, opts.opponent_emails, conn)
             .chain_err(|| "could not create game users")?;
-        let mut users: Vec<User> = opponents.iter().map(|o| o.user.clone()).collect();
+        let mut users: Vec<User> = opponents.iter().map(|&(_, ref u)| u.clone()).collect();
         users.push(creator);
 
         // Randomise the users so player order is random.
@@ -352,45 +332,48 @@ pub fn update_game(update_id: &Uuid,
                    update: &NewGame,
                    conn: &PgConnection)
                    -> Result<Option<Game>> {
-    use db::schema::games::dsl::*;
-    diesel::update(games.find(update_id))
-        .set((game_version_id.eq(update.game_version_id),
-              is_finished.eq(update.is_finished),
-              game_state.eq(update.game_state)))
+    use db::schema::games;
+    diesel::update(games::table.find(update_id))
+        .set((games::game_version_id.eq(update.game_version_id),
+              games::is_finished.eq(update.is_finished),
+              games::game_state.eq(update.game_state)))
         .get_result(conn)
         .optional()
         .chain_err(|| "error updating game")
 }
 
-pub fn update_game_whose_turn(update_id: &Uuid,
+pub fn update_game_whose_turn(id: &Uuid,
                               positions: &[usize],
                               conn: &PgConnection)
                               -> Result<Vec<GamePlayer>> {
-    use db::schema::game_players::dsl::*;
-    diesel::update(game_players.filter(game_id.eq(update_id)))
-        .set(is_turn.eq(position.eq_any(to_i32_vec(positions))))
+    use db::schema::game_players;
+
+    diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
+        .set(game_players::is_turn.eq(game_players::position.eq_any(to_i32_vec(positions))))
         .get_results(conn)
         .chain_err(|| "error updating game players")
 }
 
-pub fn update_game_eliminated(update_id: &Uuid,
+pub fn update_game_eliminated(id: &Uuid,
                               positions: &[usize],
                               conn: &PgConnection)
                               -> Result<Vec<GamePlayer>> {
-    use db::schema::game_players::dsl::*;
-    diesel::update(game_players.filter(game_id.eq(update_id)))
-        .set(is_eliminated.eq(position.eq_any(to_i32_vec(positions))))
+    use db::schema::game_players;
+
+    diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
+        .set(game_players::is_eliminated.eq(game_players::position.eq_any(to_i32_vec(positions))))
         .get_results(conn)
         .chain_err(|| "error updating game players")
 }
 
-pub fn update_game_winners(update_id: &Uuid,
+pub fn update_game_winners(id: &Uuid,
                            positions: &[usize],
                            conn: &PgConnection)
                            -> Result<Vec<GamePlayer>> {
-    use db::schema::game_players::dsl::*;
-    diesel::update(game_players.filter(game_id.eq(update_id)))
-        .set(is_winner.eq(position.eq_any(to_i32_vec(positions))))
+    use db::schema::game_players;
+
+    diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
+        .set(game_players::is_winner.eq(game_players::position.eq_any(to_i32_vec(positions))))
         .get_results(conn)
         .chain_err(|| "error updating game players")
 }
@@ -400,7 +383,6 @@ pub fn create_game_logs_from_cli(game_id: &Uuid,
                                  conn: &PgConnection)
                                  -> Result<Vec<CreatedGameLog>> {
     conn.transaction(|| {
-
         let mut player_id_by_position: HashMap<usize, Uuid> = HashMap::new();
         for p in find_game_players_by_game(game_id, conn)? {
             player_id_by_position.insert(p.position as usize, p.id);
@@ -430,41 +412,27 @@ pub fn create_game_logs_from_cli(game_id: &Uuid,
     })
 }
 
-pub fn find_game_players_by_game(search_game_id: &Uuid,
-                                 conn: &PgConnection)
-                                 -> Result<Vec<GamePlayer>> {
-    use db::schema::game_players::dsl::*;
+pub fn find_game_players_by_game(game_id: &Uuid, conn: &PgConnection) -> Result<Vec<GamePlayer>> {
+    use db::schema::game_players;
 
-    game_players
-        .filter(game_id.eq(search_game_id))
-        .order(position)
+    game_players::table
+        .filter(game_players::game_id.eq(game_id))
+        .order(game_players::position)
         .get_results(conn)
         .chain_err(|| "error finding players")
 }
 
-pub struct GamePlayerUser {
-    pub game_player: GamePlayer,
-    pub user: User,
-}
-pub fn find_game_players_with_user_by_game(search_game_id: &Uuid,
+pub fn find_game_players_with_user_by_game(game_id: &Uuid,
                                            conn: &PgConnection)
-                                           -> Result<Vec<GamePlayerUser>> {
-    use db::schema::game_players::dsl::*;
-    use db::schema::users::dsl::*;
+                                           -> Result<Vec<(GamePlayer, User)>> {
+    use db::schema::{game_players, users};
 
-    Ok(game_players
-           .filter(game_id.eq(search_game_id))
-           .order(position)
-           .get_results::<GamePlayer>(conn)
-           .chain_err(|| "error finding game players")?
-           .iter()
-           .map(|gp| {
-                    GamePlayerUser {
-                        game_player: gp.clone(),
-                        user: users.find(gp.user_id).get_result(conn).unwrap(),
-                    }
-                })
-           .collect())
+    game_players::table
+        .filter(game_players::game_id.eq(game_id))
+        .order(game_players::position)
+        .inner_join(users::table)
+        .get_results(conn)
+        .chain_err(|| "error finding game players")
 }
 
 pub struct CreatedGameLog {
@@ -519,9 +487,9 @@ pub fn create_game_log_target(new_target: &NewGameLogTarget,
 pub fn create_game_users(ids: &[Uuid],
                          emails: &[String],
                          conn: &PgConnection)
-                         -> Result<Vec<UserByEmail>> {
+                         -> Result<Vec<(UserEmail, User)>> {
     conn.transaction(|| {
-        let mut users: Vec<UserByEmail> = vec![];
+        let mut users: Vec<(UserEmail, User)> = vec![];
         for id in ids.iter() {
             users.push(find_user_with_primary_email(id, conn)?
                            .ok_or_else::<Error, _>(|| "unable to find user".into())?);
@@ -538,43 +506,33 @@ pub fn create_game_users(ids: &[Uuid],
 
 pub fn find_user_with_primary_email(find_user_id: &Uuid,
                                     conn: &PgConnection)
-                                    -> Result<Option<UserByEmail>> {
-    use db::schema::users::dsl::*;
-    use db::schema::user_emails::dsl::*;
+                                    -> Result<Option<(UserEmail, User)>> {
+    use db::schema::{users, user_emails};
 
-    Ok(match user_emails
-                 .filter(user_id.eq(find_user_id))
-                 .filter(is_primary.eq(true))
-                 .first::<UserEmail>(conn)
-                 .optional()? {
-           Some(ue) => {
-               Some(UserByEmail {
-                        user: users.find(ue.user_id).first(conn)?,
-                        user_email: ue,
-                    })
-           }
-           None => return Ok(None),
-       })
+    user_emails::table
+        .filter(user_emails::user_id.eq(find_user_id))
+        .filter(user_emails::is_primary.eq(true))
+        .inner_join(users::table)
+        .first(conn)
+        .optional()
+        .chain_err(|| "error finding user")
 }
 
 pub fn find_user_with_primary_email_by_email(search_email: &str,
                                              conn: &PgConnection)
-                                             -> Result<Option<UserByEmail>> {
-    use db::schema::users::dsl::*;
-    use db::schema::user_emails::dsl::*;
+                                             -> Result<Option<(UserEmail, User)>> {
+    use db::schema::{users, user_emails};
 
-    Ok(match user_emails
-                 .filter(email.eq(search_email))
+    Ok(match user_emails::table
+                 .filter(user_emails::email.eq(search_email))
                  .first::<UserEmail>(conn)
                  .optional()? {
            Some(ue) => {
-               Some(UserByEmail {
-                        user: users.find(ue.user_id).first(conn)?,
-                        user_email: user_emails
-                            .filter(user_id.eq(ue.user_id))
-                            .filter(is_primary.eq(true))
-                            .first(conn)?,
-                    })
+               Some(user_emails::table
+                        .filter(user_emails::user_id.eq(ue.user_id))
+                        .filter(user_emails::is_primary.eq(true))
+                        .inner_join(users::table)
+                        .first(conn)?)
            }
            None => return Ok(None),
        })
@@ -630,25 +588,15 @@ pub fn create_game_player(player: &NewGamePlayer, conn: &PgConnection) -> Result
         .chain_err(|| "error inserting game player")
 }
 
-pub struct GameGameVersion {
-    pub game_type: GameType,
-    pub game_version: GameVersion,
-}
-pub fn public_game_versions(conn: &PgConnection) -> Result<Vec<GameGameVersion>> {
-    use db::schema::game_versions::dsl::*;
-    use db::schema::game_types::dsl::*;
+pub fn public_game_versions(conn: &PgConnection) -> Result<Vec<(GameVersion, GameType)>> {
+    use db::schema::{game_versions, game_types};
 
-    let mut ret = vec![];
-    for gv in game_versions
-            .filter(is_public.eq(true))
-            .filter(is_deprecated.eq(false))
-            .get_results::<GameVersion>(conn)? {
-        ret.push(GameGameVersion {
-                     game_type: game_types.find(gv.game_type_id).get_result(conn)?,
-                     game_version: gv,
-                 });
-    }
-    Ok(ret)
+    game_versions::table
+        .filter(game_versions::is_public.eq(true))
+        .filter(game_versions::is_deprecated.eq(false))
+        .inner_join(game_types::table)
+        .get_results(conn)
+        .chain_err(|| "error finding game versions")
 }
 
 #[cfg(test)]
@@ -735,32 +683,33 @@ mod tests {
     #[ignore]
     fn find_user_with_primary_email_works() {
         with_db(|conn| {
-                    let ube = create_user_by_email("beefsack@gmail.com", conn).unwrap();
-                    let found = find_user_with_primary_email(&ube.user.id, conn)
-                        .unwrap()
-                        .unwrap();
-                    assert_eq!(ube.user.id, found.user.id);
-                    assert_eq!("beefsack@gmail.com", ube.user_email.email);
-                });
+            let (user_email, user) = create_user_by_email("beefsack@gmail.com", conn).unwrap();
+            let (_, found_user) = find_user_with_primary_email(&user.id, conn)
+                .unwrap()
+                .unwrap();
+            assert_eq!(user.id, found_user.id);
+            assert_eq!("beefsack@gmail.com", user_email.email);
+        });
     }
 
     #[test]
     #[ignore]
     fn find_user_with_primary_email_by_email_works() {
         with_db(|conn| {
-            let ube = create_user_by_email("beefsack@gmail.com", conn).unwrap();
+            let (user_email, user) = create_user_by_email("beefsack@gmail.com", conn).unwrap();
             create_user_email(&NewUserEmail {
-                                   user_id: ube.user.id,
+                                   user_id: user.id,
                                    email: "beefsack+two@gmail.com",
                                    is_primary: false,
                                },
                               conn)
                     .expect("error creating user email");
-            let found = find_user_with_primary_email_by_email("beefsack+two@gmail.com", conn)
-                .expect("error finding user")
-                .expect("user doesn't exist");
-            assert_eq!(ube.user.id, found.user.id);
-            assert_eq!("beefsack@gmail.com", ube.user_email.email);
+            let (_, found_user) = find_user_with_primary_email_by_email("beefsack+two@gmail.com",
+                                                                        conn)
+                    .expect("error finding user")
+                    .expect("user doesn't exist");
+            assert_eq!(user.id, found_user.id);
+            assert_eq!("beefsack@gmail.com", user_email.email);
         });
     }
 
@@ -792,8 +741,8 @@ mod tests {
     #[ignore]
     fn create_players_works() {
         with_db(|conn| {
-            let p1 = create_user_by_email("beefsack@gmail.com", conn).unwrap();
-            let p2 = create_user_by_email("beefsack+two@gmail.com", conn).unwrap();
+            let (_, p1) = create_user_by_email("beefsack@gmail.com", conn).unwrap();
+            let (_, p2) = create_user_by_email("beefsack+two@gmail.com", conn).unwrap();
             let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
             let game_version = create_game_version(&NewGameVersion {
                                                         game_type_id: game_type.id,
@@ -813,7 +762,7 @@ mod tests {
                     .unwrap();
             create_game_players(&[NewGamePlayer {
                                       game_id: game.id,
-                                      user_id: p1.user.id,
+                                      user_id: p1.id,
                                       position: 0,
                                       color: &Color::Green.to_string(),
                                       has_accepted: true,
@@ -824,7 +773,7 @@ mod tests {
                                   },
                                   NewGamePlayer {
                                       game_id: game.id,
-                                      user_id: p2.user.id,
+                                      user_id: p2.id,
                                       position: 1,
                                       color: &Color::Red.to_string(),
                                       has_accepted: false,

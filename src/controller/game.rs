@@ -95,7 +95,7 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
     };
 
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
-    let ube = authenticate(&client, conn)?;
+    let (_, user) = authenticate(&client, conn)?;
     let player_count: usize = 1 + opponent_ids.len() + opponent_emails.len();
 
     let created_game: query::CreatedGame = conn.transaction::<_, Error, _>(|| {
@@ -121,7 +121,7 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
                                                    whose_turn: &status.whose_turn,
                                                    eliminated: &status.eliminated,
                                                    winners: &status.winners,
-                                                   creator_id: &ube.user.id,
+                                                   creator_id: &user.id,
                                                    opponent_ids: &opponent_ids,
                                                    opponent_emails: &opponent_emails,
                                                },
@@ -194,7 +194,7 @@ pub fn command<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
     let cmd_text = params.find("command").unwrap().as_str().unwrap();
 
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
-    let ube = authenticate(&client, conn)?;
+    let (_, user) = authenticate(&client, conn)?;
 
     conn.transaction::<_, Error, _>(|| {
 
@@ -208,18 +208,18 @@ pub fn command<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
                 .chain_err(|| "error finding game players")?;
             let position = players
                 .iter()
-                .find(|p| p.user.id == ube.user.id)
+                .find(|&&(ref p, _)| p.user_id == user.id)
                 .ok_or_else::<Error, _>(|| {
                                             ErrorKind::UserError("you are not a player in this game"
                                                                      .to_string())
                                                     .into()
                                         })?
-                .game_player
+                .0
                 .position;
 
             let names = players
                 .iter()
-                .map(|p| p.user.name.clone())
+                .map(|&(_, ref user)| user.name.clone())
                 .collect::<Vec<String>>();
 
             let (game_response, logs, remaining_command) =
@@ -267,13 +267,13 @@ pub fn version_public<'a>(client: Client<'a>, params: &JsonValue) -> HandleResul
     client.json(&JsonValue::Array(query::public_game_versions(conn)
                                       .chain_err(|| "error getting public game versions")?
                                       .iter()
-                                      .map(|gv| {
+                                      .map(|&(ref game_version, ref game_type)| {
         JsonValue::Object({
                               let mut props = BTreeMap::new();
                               props.insert("game_version_id".to_string(),
-                                           JsonValue::String(gv.game_version.id.to_string()));
+                                           JsonValue::String(game_version.id.to_string()));
                               props.insert("name".to_string(),
-                                           JsonValue::String(gv.game_type.name.to_owned()));
+                                           JsonValue::String(game_type.name.to_owned()));
                               props
                           })
     })
@@ -287,13 +287,13 @@ pub fn my_recent<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Cli
     client.json(&JsonValue::Array(query::public_game_versions(conn)
                                       .chain_err(|| "error getting public game versions")?
                                       .iter()
-                                      .map(|gv| {
+                                      .map(|&(ref game_version, ref game_type)| {
         JsonValue::Object({
                               let mut props = BTreeMap::new();
                               props.insert("game_version_id".to_string(),
-                                           JsonValue::String(gv.game_version.id.to_string()));
+                                           JsonValue::String(game_version.id.to_string()));
                               props.insert("name".to_string(),
-                                           JsonValue::String(gv.game_type.name.to_owned()));
+                                           JsonValue::String(game_type.name.to_owned()));
                               props
                           })
     })

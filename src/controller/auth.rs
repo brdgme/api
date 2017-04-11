@@ -13,6 +13,7 @@ use std::{error, fmt};
 
 use errors::*;
 use db::{CONN, query};
+use db::models::*;
 use mail;
 
 #[derive(Debug)]
@@ -90,7 +91,7 @@ pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
 
 pub fn authenticate<'a>(client: &Client<'a>,
                         conn: &PgConnection)
-                        -> HandleResult<query::UserByEmail> {
+                        -> HandleResult<(UserEmail, User)> {
     let auth_header =
         &client
              .request

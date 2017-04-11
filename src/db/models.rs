@@ -122,6 +122,7 @@ pub struct NewGame<'a> {
 
 #[derive(Queryable, Clone, Identifiable, Associations)]
 #[belongs_to(Game)]
+#[belongs_to(User)]
 #[has_many(game_log_targets)]
 pub struct GamePlayer {
     pub id: Uuid,
