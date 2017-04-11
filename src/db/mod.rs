@@ -1,9 +1,11 @@
 pub mod query;
 pub mod models;
 pub mod color;
+pub mod schema;
 
 use r2d2;
-use r2d2_postgres::{TlsMode, PostgresConnectionManager};
+use r2d2_diesel;
+use diesel;
 use std::env;
 use errors::*;
 
@@ -12,8 +14,8 @@ lazy_static! {
 }
 
 pub struct Connections {
-    pub w: r2d2::Pool<PostgresConnectionManager>,
-    pub r: r2d2::Pool<PostgresConnectionManager>,
+    pub w: r2d2::Pool<r2d2_diesel::ConnectionManager<diesel::pg::PgConnection>>,
+    pub r: r2d2::Pool<r2d2_diesel::ConnectionManager<diesel::pg::PgConnection>>,
 }
 
 pub fn connect(w_addr: &str, r_addr: &str) -> Result<Connections> {
@@ -30,15 +32,9 @@ pub fn connect_env() -> Result<Connections> {
             &env::var("DATABASE_URL_R").unwrap_or_else(|_| w_addr.to_owned()))
 }
 
-fn conn(addr: &str) -> Result<r2d2::Pool<PostgresConnectionManager>> {
+fn conn(addr: &str)
+        -> Result<r2d2::Pool<r2d2_diesel::ConnectionManager<diesel::pg::PgConnection>>> {
     r2d2::Pool::new(r2d2::Config::default(),
-                    PostgresConnectionManager::new(addr, TlsMode::None)
-                        .chain_err(|| "unable to create connection manager")?)
+                    r2d2_diesel::ConnectionManager::<diesel::pg::PgConnection>::new(addr))
             .chain_err(|| "unable to connect to database")
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {}
 }

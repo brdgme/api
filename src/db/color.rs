@@ -1,11 +1,13 @@
 use rand::{self, Rng};
 
 use std::collections::{HashSet, HashMap};
+use std::str::FromStr;
 
 use brdgme_color;
 
-#[derive(Debug, ToSql, FromSql, PartialEq, Eq, Hash, Clone, Copy)]
-#[postgres(name = "color")]
+use errors::*;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Color {
     Green,
     Red,
@@ -24,6 +26,16 @@ pub static COLORS: &'static [Color] = &[Color::Green,
                                         Color::Brown,
                                         Color::BlueGrey];
 
+impl Color {
+    pub fn from_strings(from: &[String]) -> Result<Vec<Color>> {
+        let mut cols = vec![];
+        for s in from {
+            cols.push(Color::from_str(s)?)
+        }
+        Ok(cols)
+    }
+}
+
 impl Into<brdgme_color::Color> for Color {
     fn into(self) -> brdgme_color::Color {
         match self {
@@ -35,6 +47,38 @@ impl Into<brdgme_color::Color> for Color {
             Color::Brown => brdgme_color::BROWN,
             Color::BlueGrey => brdgme_color::BLUE_GREY,
         }
+    }
+}
+
+impl ToString for Color {
+    fn to_string(&self) -> String {
+        match *self {
+                Color::Green => "Green",
+                Color::Red => "Red",
+                Color::Blue => "Blue",
+                Color::Amber => "Amber",
+                Color::Purple => "Purple",
+                Color::Brown => "Brown",
+                Color::BlueGrey => "BlueGrey",
+            }
+            .to_string()
+    }
+}
+
+impl FromStr for Color {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        Ok(match s {
+               "Green" => Color::Green,
+               "Red" => Color::Red,
+               "Blue" => Color::Blue,
+               "Amber" => Color::Amber,
+               "Purple" => Color::Purple,
+               "Brown" => Color::Brown,
+               "BlueGrey" => Color::BlueGrey,
+               _ => bail!("Invalid color"),
+           })
     }
 }
 

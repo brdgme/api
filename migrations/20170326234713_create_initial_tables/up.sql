@@ -23,7 +23,7 @@ CREATE TABLE users (
   created_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   name VARCHAR NOT NULL UNIQUE,
-  pref_colors color[] NOT NULL DEFAULT ARRAY[]::color[],
+  pref_colors VARCHAR[] NOT NULL,
   login_confirmation VARCHAR,
   login_confirmation_at TIMESTAMP
 );
@@ -85,11 +85,12 @@ CREATE TABLE game_players (
   game_id UUID NOT NULL REFERENCES games (id),
   user_id UUID NOT NULL REFERENCES users (id),
   position INT NOT NULL,
-  color color NOT NULL,
+  color VARCHAR NOT NULL,
   has_accepted BOOL NOT NULL,
   is_turn BOOL NOT NULL,
   is_eliminated BOOL NOT NULL,
   is_winner BOOL NOT NULL,
+  is_read BOOL NOT NULL,
   UNIQUE (game_id, user_id),
   UNIQUE (game_id, color),
   UNIQUE (game_id, position)

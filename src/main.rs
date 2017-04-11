@@ -10,12 +10,7 @@ extern crate email;
 extern crate lazy_static;
 #[macro_use]
 extern crate error_chain;
-#[macro_use]
-extern crate postgres;
-#[macro_use]
-extern crate postgres_derive;
 extern crate r2d2;
-extern crate r2d2_postgres;
 extern crate rand;
 extern crate chrono;
 extern crate lettre;
@@ -25,6 +20,11 @@ extern crate uuid;
 extern crate hyper;
 extern crate hyper_native_tls;
 extern crate serde_json;
+#[macro_use]
+extern crate diesel;
+#[macro_use]
+extern crate diesel_codegen;
+extern crate r2d2_diesel;
 
 extern crate brdgme_cmd;
 extern crate brdgme_game;
@@ -40,9 +40,9 @@ mod mail;
 mod errors {
     error_chain!{
         foreign_links {
-            Postgres(::postgres::error::Error);
             EnvVar(::std::env::VarError);
             Chrono(::chrono::ParseError);
+            Diesel(::diesel::result::Error);
         }
 
         errors {

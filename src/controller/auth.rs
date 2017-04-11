@@ -7,14 +7,12 @@ use rustless::server::header;
 use valico::json_dsl;
 use lettre::email::EmailBuilder;
 use uuid::Uuid;
-use postgres::GenericConnection;
-
-use db::query;
+use diesel::pg::PgConnection;
 
 use std::{error, fmt};
 
 use errors::*;
-use db::CONN;
+use db::{CONN, query};
 use mail;
 
 #[derive(Debug)]
@@ -91,7 +89,7 @@ pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
 }
 
 pub fn authenticate<'a>(client: &Client<'a>,
-                        conn: &GenericConnection)
+                        conn: &PgConnection)
                         -> HandleResult<query::UserByEmail> {
     let auth_header =
         &client
