@@ -37,7 +37,7 @@ pub fn send<T: SendableEmail>(email: T) -> Result<()> {
 pub fn html_layout(content: &str) -> String {
     format!("
         <link
-            href=\"https://fonts.googleapis.com/css?family=Source+Code+Pro\"
+            href=\"https://fonts.googleapis.com/css?family=Source+Code+Pro:400,700\"
             rel=\"stylesheet\"
         >
         <pre

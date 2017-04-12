@@ -91,13 +91,14 @@ pub fn confirm<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
 
 pub fn authenticate<'a>(client: &Client<'a>,
                         conn: &PgConnection)
-                        -> HandleResult<(UserEmail, User)> {
-    let auth_header =
-        &client
-             .request
-             .headers()
-             .get::<header::Authorization<header::Basic>>()
-             .ok_or_else::<Error, _>(|| "unable to get Authorization header".into())?;
+                        -> HandleResult<Option<(UserEmail, User)>> {
+    let auth_header = match client
+              .request
+              .headers()
+              .get::<header::Authorization<header::Basic>>() {
+        Some(h) => h,
+        None => return Ok(None),
+    };
     let email = auth_header.username.to_owned();
     let password = auth_header
         .password
@@ -110,9 +111,14 @@ pub fn authenticate<'a>(client: &Client<'a>,
                            &Uuid::parse_str(&password)
                                 .map_err::<ErrorResponse, _>(|_| UnauthorizedError {}.into())?,
                            conn)
-               .chain_err(|| "unable to authenticate")?
-               .ok_or_else::<ErrorResponse, _>(|| UnauthorizedError {}.into())?)
+               .chain_err(|| "unable to authenticate")?)
+}
 
+pub fn must_authenticate<'a>(client: &Client<'a>,
+                             conn: &PgConnection)
+                             -> HandleResult<(UserEmail, User)> {
+    authenticate(client, conn)?
+        .ok_or_else::<ErrorResponse, _>(|| UnauthorizedError {}.into())
 }
 
 #[cfg(test)]

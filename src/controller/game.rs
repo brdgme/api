@@ -5,21 +5,19 @@ use rustless::backend::HandleResult;
 use rustless::Nesting;
 use valico::json_dsl;
 use uuid::Uuid;
-use hyper::{self, Client as HttpClient};
-use hyper::net::HttpsConnector;
-use hyper_native_tls::NativeTlsClient;
-use serde_json;
 use diesel::Connection;
 
 use brdgme_cmd::cli;
 use brdgme_game::Status;
+use brdgme_markup as markup;
 
 use std::collections::BTreeMap;
 
-use controller::auth::authenticate;
+use controller::auth::{authenticate, must_authenticate};
 use db::{query, models};
 use errors::*;
 use db::CONN;
+use game_client;
 
 pub fn namespace(ns: &mut Namespace) {
     ns.get("", |endpoint| {
@@ -99,7 +97,7 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
     };
 
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
-    let (_, user) = authenticate(&client, conn)?;
+    let (_, user) = must_authenticate(&client, conn)?;
     let player_count: usize = 1 + opponent_ids.len() + opponent_emails.len();
 
     let created_game: query::CreatedGame = conn.transaction::<_, Error, _>(|| {
@@ -108,8 +106,8 @@ pub fn create<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client
                     .chain_err(|| "error finding game version")?
                     .ok_or_else::<Error, _>(|| "could not find game version".into())?;
 
-            let resp = game_request(&game_version.uri,
-                                    &cli::Request::New { players: player_count })?;
+            let resp = game_client::request(&game_version.uri,
+                                            &cli::Request::New { players: player_count })?;
             let (game_info, logs) = match resp {
                 cli::Response::New { game, logs } => (game, logs),
                 _ => bail!("expected cli::Response::New"),
@@ -163,30 +161,93 @@ fn game_status_values(status: &Status) -> StatusValues {
     }
 }
 
-fn game_request(uri: &str, request: &cli::Request) -> Result<cli::Response> {
-    let ssl = NativeTlsClient::new()
-        .chain_err(|| "unable to get native TLS client")?;
-    let connector = HttpsConnector::new(ssl);
-    let https = HttpClient::with_connector(connector);
-    let res = https
-        .post(uri)
-        .body(&serde_json::to_string(request)
-                   .chain_err(|| "error converting request to JSON")?)
-        .send()
-        .chain_err(|| "error getting new game state")?;
-    if res.status != hyper::Ok {
-        bail!("game request failed");
-    }
-    match serde_json::from_reader::<_, cli::Response>(res)
-              .chain_err(|| "error parsing JSON response")? {
-        cli::Response::UserError { message } => Err(ErrorKind::UserError(message).into()),
-        cli::Response::SystemError { message } => Err(message.into()),
-        default => Ok(default),
-    }
+pub fn show<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
+    let conn = &*CONN.r.get().chain_err(|| "error getting connection")?;
+    let user = match authenticate(&client, conn)? {
+        Some((_, u)) => Some(u),
+        None => None,
+    };
+    let id =
+        Uuid::parse_str(params.find("id").unwrap().as_str().unwrap())
+            .map_err::<Error, _>(|_| ErrorKind::UserError("id is not a UUID".to_string()).into())?;
+
+    let query::GameExtended {
+        game,
+        game_version,
+        game_type,
+        game_players,
+    } = query::find_game_extended(&id, conn)?;
+    let game_player: Option<&models::GamePlayer> = user.clone()
+        .and_then(|u| {
+                      game_players
+                          .iter()
+                          .find(|&&(ref gp, _)| u.id == gp.user_id)
+                          .map(|&(ref gp, _)| gp)
+                  });
+
+    let render = match game_client::request(&game_version.uri,
+                                            &cli::Request::Render {
+                                                 player: game_player.map(|gp| gp.position as usize),
+                                                 game: game.game_state.to_owned(),
+                                             })? {
+        cli::Response::Render { render: r } => r,
+        _ => return Err(err_resp("invalid render response")),
+    };
+
+    let (nodes, _) = markup::from_string(&render)
+        .chain_err(|| "error parsing render markup")?;
+
+    let markup_players = game_client::game_players_to_markup_players(&game_players);
+    let game_logs = match game_player {
+        Some(gp) => query::find_game_logs_for_player(&gp.id, conn),
+        None => query::find_public_game_logs_for_game(&game.id, conn),
+    }?;
+    let log_json = game_logs_to_public_json(&game_logs, &markup_players)?;
+
+    client.json(&JsonValue::Object({
+        let mut props = BTreeMap::new();
+        props.insert("game".to_string(), game.to_public_json());
+        props.insert("game_version".to_string(), game_version.to_public_json());
+        props.insert("game_type".to_string(), game_type.to_public_json());
+        props.insert("game_players".to_string(), JsonValue::Array(
+            game_players.iter().map(game_player_user_to_public_json).collect()));
+        props.insert("game_html".to_string(), JsonValue::String(markup::html(&markup::transform(
+        &nodes,
+        &markup_players,
+        ))));
+        props.insert("game_logs".to_string(), log_json);
+        props
+    }))
 }
 
-pub fn show<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
-    client.json(&params.to_json())
+fn game_logs_to_public_json(game_logs: &[models::GameLog],
+                            markup_players: &[markup::Player])
+                            -> Result<JsonValue> {
+    let mut json_logs = vec![];
+    for gl in game_logs {
+        let log_html = markup::html(&markup::transform(&markup::from_string(&gl.body)?.0,
+                                                       markup_players));
+        json_logs.push(JsonValue::Object({
+                                             let mut props = BTreeMap::new();
+                                             props.insert("game_log".to_string(),
+                                                          gl.to_public_json());
+                                             props.insert("game_log_html".to_string(),
+                                                          JsonValue::String(log_html));
+                                             props
+                                         }));
+    }
+    Ok(JsonValue::Array(json_logs))
+}
+
+fn game_player_user_to_public_json(&(ref game_player, ref user): &(models::GamePlayer,
+                                                                   models::User))
+                                   -> JsonValue {
+    JsonValue::Object({
+                          let mut props = BTreeMap::new();
+                          props.insert("game_player".to_string(), game_player.to_public_json());
+                          props.insert("user".to_string(), user.to_public_json());
+                          props
+                      })
 }
 
 pub fn command<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
@@ -198,7 +259,7 @@ pub fn command<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
     let cmd_text = params.find("command").unwrap().as_str().unwrap();
 
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
-    let (_, user) = authenticate(&client, conn)?;
+    let (_, user) = must_authenticate(&client, conn)?;
 
     conn.transaction::<_, Error, _>(|| {
 
@@ -227,13 +288,13 @@ pub fn command<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
                 .collect::<Vec<String>>();
 
             let (game_response, logs, remaining_command) =
-                match game_request(&game_version.uri,
-                                   &cli::Request::Play {
-                                        player: position as usize,
-                                        game: game.game_state,
-                                        command: cmd_text.to_string(),
-                                        names: names,
-                                    })? {
+                match game_client::request(&game_version.uri,
+                                           &cli::Request::Play {
+                                                player: position as usize,
+                                                game: game.game_state,
+                                                command: cmd_text.to_string(),
+                                                names: names,
+                                            })? {
                     cli::Response::Play {
                         game,
                         logs,
@@ -288,7 +349,7 @@ pub fn version_public<'a>(client: Client<'a>, params: &JsonValue) -> HandleResul
 pub fn my_active<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'a>> {
     let conn = &*CONN.r.get().chain_err(|| "unable to get connection")?;
 
-    let (_, user) = authenticate(&client, conn)?;
+    let (_, user) = must_authenticate(&client, conn)?;
 
     client.json(&JsonValue::Array(query::find_active_games_for_user(&user.id, conn)
                                       .chain_err(|| "error getting active_games")?

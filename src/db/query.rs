@@ -230,6 +230,25 @@ pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<
            .collect())
 }
 
+pub fn find_game_extended(id: &Uuid, conn: &PgConnection) -> Result<GameExtended> {
+    use db::schema::{games, game_versions, game_types};
+
+    let (game, game_version) = games::table
+        .find(id)
+        .inner_join(game_versions::table)
+        .get_result::<(Game, GameVersion)>(conn)?;
+    let game_type: GameType = game_types::table
+        .find(game_version.game_type_id)
+        .get_result(conn)?;
+    let players = find_game_players_with_user_by_game(&game.id, conn)?;
+    Ok(GameExtended {
+           game: game.clone(),
+           game_type: game_type,
+           game_version: game_version,
+           game_players: players,
+       })
+}
+
 pub struct CreatedGame {
     pub game: Game,
     pub opponents: Vec<(UserEmail, User)>,
@@ -593,6 +612,39 @@ pub fn public_game_versions(conn: &PgConnection) -> Result<Vec<(GameVersion, Gam
         .inner_join(game_types::table)
         .get_results(conn)
         .chain_err(|| "error finding game versions")
+}
+
+pub fn find_public_game_logs_for_game(game_id: &Uuid, conn: &PgConnection) -> Result<Vec<GameLog>> {
+    use db::schema::game_logs;
+
+    game_logs::table
+        .filter(game_logs::game_id.eq(game_id))
+        .filter(game_logs::is_public.eq(true))
+        .order(game_logs::logged_at)
+        .get_results(conn)
+        .chain_err(|| "error finding game logs")
+}
+
+pub fn find_game_logs_for_player(game_player_id: &Uuid,
+                                 conn: &PgConnection)
+                                 -> Result<Vec<GameLog>> {
+    use db::schema::{game_logs, game_log_targets, game_players};
+
+    let game_player: GamePlayer = game_players::table
+        .find(game_player_id)
+        .get_result(conn)?;
+    Ok(game_logs::table
+           .left_outer_join(game_log_targets::table)
+           .filter(game_logs::game_id.eq(game_player.game_id))
+           .filter(game_logs::is_public
+                       .eq(true)
+                       .or(game_log_targets::game_player_id.eq(game_player_id)))
+           .order(game_logs::logged_at)
+           .get_results::<(GameLog, Option<GameLogTarget>)>(conn)
+           .chain_err(|| "error finding game logs")?
+           .iter()
+           .map(|&(ref gl, _)| gl.clone())
+           .collect())
 }
 
 #[cfg(test)]

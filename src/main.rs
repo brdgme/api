@@ -29,6 +29,7 @@ extern crate r2d2_diesel;
 extern crate brdgme_cmd;
 extern crate brdgme_game;
 extern crate brdgme_color;
+extern crate brdgme_markup;
 
 use rustless::ErrorResponse;
 
@@ -36,9 +37,14 @@ mod config;
 mod controller;
 mod db;
 mod mail;
+mod game_client;
 
 mod errors {
     error_chain!{
+        links {
+            Markup(::brdgme_markup::errors::Error, ::brdgme_markup::errors::ErrorKind);
+        }
+
         foreign_links {
             EnvVar(::std::env::VarError);
             Chrono(::chrono::ParseError);

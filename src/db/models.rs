@@ -1,5 +1,8 @@
 use uuid::Uuid;
 use chrono::NaiveDateTime;
+use rustless::json::JsonValue;
+
+use std::collections::BTreeMap;
 
 use db::schema::*;
 
@@ -15,6 +18,21 @@ pub struct User {
     pub pref_colors: Vec<String>,
     pub login_confirmation: Option<String>,
     pub login_confirmation_at: Option<NaiveDateTime>,
+}
+
+impl User {
+    pub fn to_public_json(&self) -> JsonValue {
+        JsonValue::Object({
+                              let mut props = BTreeMap::new();
+                              props.insert("id".to_string(),
+                                           JsonValue::String(self.id.to_string()));
+                              props.insert("name".to_string(),
+                                           JsonValue::String(self.name.to_owned()));
+                              props.insert("pref_colors".to_string(), JsonValue::Array(self.pref_colors.iter().map(|pc|
+            JsonValue::String(pc.to_owned())).collect()));
+                              props
+                          })
+    }
 }
 
 #[derive(Insertable)]
@@ -69,6 +87,19 @@ pub struct GameType {
     pub name: String,
 }
 
+impl GameType {
+    pub fn to_public_json(&self) -> JsonValue {
+        JsonValue::Object({
+                              let mut props = BTreeMap::new();
+                              props.insert("id".to_string(),
+                                           JsonValue::String(self.id.to_string()));
+                              props.insert("name".to_string(),
+                                           JsonValue::String(self.name.to_owned()));
+                              props
+                          })
+    }
+}
+
 #[derive(Insertable)]
 #[table_name="game_types"]
 pub struct NewGameType<'a> {
@@ -87,6 +118,25 @@ pub struct GameVersion {
     pub uri: String,
     pub is_public: bool,
     pub is_deprecated: bool,
+}
+
+impl GameVersion {
+    pub fn to_public_json(&self) -> JsonValue {
+        JsonValue::Object({
+                              let mut props = BTreeMap::new();
+                              props.insert("id".to_string(),
+                                           JsonValue::String(self.id.to_string()));
+                              props.insert("game_type_id".to_string(),
+                                           JsonValue::String(self.game_type_id.to_string()));
+                              props.insert("name".to_string(),
+                                           JsonValue::String(self.name.to_owned()));
+                              props.insert("is_public".to_string(),
+                                           JsonValue::Bool(self.is_public));
+                              props.insert("is_deprecated".to_string(),
+                                           JsonValue::Bool(self.is_deprecated));
+                              props
+                          })
+    }
 }
 
 #[derive(Insertable)]
@@ -110,6 +160,21 @@ pub struct Game {
     pub game_version_id: Uuid,
     pub is_finished: bool,
     pub game_state: String,
+}
+
+impl Game {
+    pub fn to_public_json(&self) -> JsonValue {
+        JsonValue::Object({
+                              let mut props = BTreeMap::new();
+                              props.insert("id".to_string(),
+                                           JsonValue::String(self.id.to_string()));
+                              props.insert("game_version_id".to_string(),
+                                           JsonValue::String(self.game_version_id.to_string()));
+                              props.insert("is_finished".to_string(),
+                                           JsonValue::Bool(self.is_finished));
+                              props
+                          })
+    }
 }
 
 #[derive(Insertable)]
@@ -139,6 +204,28 @@ pub struct GamePlayer {
     pub is_read: bool,
 }
 
+impl GamePlayer {
+    pub fn to_public_json(&self) -> JsonValue {
+        JsonValue::Object({
+                              let mut props = BTreeMap::new();
+                              props.insert("id".to_string(),
+                                           JsonValue::String(self.id.to_string()));
+                              props.insert("position".to_string(),
+                                           JsonValue::U64(self.position as u64));
+                              props.insert("color".to_string(),
+                                           JsonValue::String(self.color.to_owned()));
+                              props.insert("has_accepted".to_string(),
+                                           JsonValue::Bool(self.has_accepted));
+                              props.insert("is_turn".to_string(), JsonValue::Bool(self.is_turn));
+                              props.insert("is_eliminated".to_string(),
+                                           JsonValue::Bool(self.is_eliminated));
+                              props.insert("is_winner".to_string(),
+                                           JsonValue::Bool(self.is_winner));
+                              props
+                          })
+    }
+}
+
 #[derive(Insertable)]
 #[table_name="game_players"]
 pub struct NewGamePlayer<'a> {
@@ -164,6 +251,25 @@ pub struct GameLog {
     pub body: String,
     pub is_public: bool,
     pub logged_at: NaiveDateTime,
+}
+
+impl GameLog {
+    pub fn to_public_json(&self) -> JsonValue {
+        JsonValue::Object({
+                              let mut props = BTreeMap::new();
+                              props.insert("id".to_string(),
+                                           JsonValue::String(self.id.to_string()));
+                              props.insert("game_id".to_string(),
+                                           JsonValue::String(self.game_id.to_string()));
+                              props.insert("is_public".to_string(),
+                                           JsonValue::Bool(self.is_public));
+                              props.insert("body".to_string(),
+                                           JsonValue::String(self.body.to_owned()));
+                              props.insert("logged_at".to_string(),
+                                           JsonValue::String(self.logged_at.to_string()));
+                              props
+                          })
+    }
 }
 
 #[derive(Insertable)]
