@@ -8,10 +8,10 @@ use uuid::Uuid;
 use diesel::Connection;
 
 use brdgme_cmd::cli;
-use brdgme_game::Status;
+use brdgme_game::{Status, Stat};
 use brdgme_markup as markup;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use controller::auth::{authenticate, must_authenticate};
 use db::{query, models};
@@ -143,21 +143,26 @@ struct StatusValues {
     whose_turn: Vec<usize>,
     eliminated: Vec<usize>,
     winners: Vec<usize>,
+    stats: Vec<HashMap<String, Stat>>,
 }
 fn game_status_values(status: &Status) -> StatusValues {
 
-    let (is_finished, whose_turn, eliminated, winners) = match *status {
+    let (is_finished, whose_turn, eliminated, winners, stats) = match *status {
         Status::Active {
             ref whose_turn,
             ref eliminated,
-        } => (false, whose_turn.clone(), eliminated.clone(), vec![]),
-        Status::Finished { ref winners } => (true, vec![], vec![], winners.clone()),
+        } => (false, whose_turn.clone(), eliminated.clone(), vec![], vec![]),
+        Status::Finished {
+            ref winners,
+            ref stats,
+        } => (true, vec![], vec![], winners.clone(), stats.clone()),
     };
     StatusValues {
         is_finished: is_finished,
         whose_turn: whose_turn,
         eliminated: eliminated,
         winners: winners,
+        stats: stats,
     }
 }
 
@@ -287,7 +292,7 @@ pub fn command<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
                 .map(|&(_, ref user)| user.name.clone())
                 .collect::<Vec<String>>();
 
-            let (game_response, logs, remaining_command) =
+            let (game_response, logs, can_undo, remaining_command) =
                 match game_client::request(&game_version.uri,
                                            &cli::Request::Play {
                                                 player: position as usize,
@@ -298,8 +303,9 @@ pub fn command<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Clien
                     cli::Response::Play {
                         game,
                         logs,
-                        remaining_command,
-                    } => (game, logs, remaining_command),
+                        can_undo,
+                        remaining_input,
+                    } => (game, logs, can_undo, remaining_input),
                     _ => bail!("invalid response type"),
                 };
             let status = game_status_values(&game_response.status);
