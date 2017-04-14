@@ -190,14 +190,23 @@ pub fn show<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'
                           .map(|&(ref gp, _)| gp)
                   });
 
-    let render = match game_client::request(&game_version.uri,
-                                            &cli::Request::Render {
-                                                 player: game_player.map(|gp| gp.position as usize),
-                                                 game: game.game_state.to_owned(),
-                                             })? {
-        cli::Response::Render { render: r } => r,
-        _ => return Err(err_resp("invalid render response")),
-    };
+    let (pub_state, render, command_spec) =
+        match game_client::request(&game_version.uri,
+                                   &cli::Request::Render {
+                                        player: game_player.map(|gp| gp.position as usize),
+                                        game: game.game_state.to_owned(),
+                                        names: game_players
+                                            .iter()
+                                            .map(|&(_, ref u)| u.name.to_owned())
+                                            .collect(),
+                                    })? {
+            cli::Response::Render {
+                pub_state,
+                render,
+                command_spec,
+            } => (pub_state, render, command_spec),
+            _ => return Err(err_resp("invalid render response")),
+        };
 
     let (nodes, _) = markup::from_string(&render)
         .chain_err(|| "error parsing render markup")?;
@@ -212,6 +221,7 @@ pub fn show<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'
     client.json(&JsonValue::Object({
         let mut props = BTreeMap::new();
         props.insert("game".to_string(), game.to_public_json());
+        props.insert("pub_state".to_string(), pub_state.to_json());
         props.insert("game_version".to_string(), game_version.to_public_json());
         props.insert("game_type".to_string(), game_type.to_public_json());
         props.insert("game_players".to_string(), JsonValue::Array(
@@ -221,6 +231,10 @@ pub fn show<'a>(client: Client<'a>, params: &JsonValue) -> HandleResult<Client<'
         &markup_players,
         ))));
         props.insert("game_logs".to_string(), log_json);
+        if let Some(spec) = command_spec {
+            // TODO send command spec
+            //props.insert("command_spec".to_string(), spec.to_json());
+        }
         props
     }))
 }
