@@ -197,6 +197,34 @@ pub struct GameExtended {
     pub game_version: GameVersion,
     pub game_players: Vec<(GamePlayer, User)>,
 }
+
+impl GameExtended {
+    pub fn into_public(self) -> PublicGameExtended {
+        PublicGameExtended {
+            game: self.game.into_public(),
+            game_type: self.game_type,
+            game_version: self.game_version.into_public(),
+            game_players: self.game_players
+                .into_iter()
+                .map(|(gp, u)| {
+                         PublicGamePlayerUser {
+                             game_player: gp,
+                             user: u.into_public(),
+                         }
+                     })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct PublicGameExtended {
+    pub game: PublicGame,
+    pub game_type: PublicGameType,
+    pub game_version: PublicGameVersion,
+    pub game_players: Vec<PublicGamePlayerUser>,
+}
+
 pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<GameExtended>> {
     use db::schema::{games, game_players, game_versions, game_types};
 

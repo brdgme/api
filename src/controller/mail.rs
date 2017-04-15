@@ -1,22 +1,14 @@
-use rustless::framework::client::Client;
-use rustless::framework::Namespace;
-use rustless::json::JsonValue;
-use rustless::backend::HandleResult;
-use rustless::Nesting;
-
 use mail::handle_inbound_email;
+use rocket::Data;
 
-pub fn namespace(ns: &mut Namespace) {
-    ns.post("", |endpoint| {
-        endpoint.desc("Handle inbound email");
-        endpoint.handle(index)
-    });
-}
+use std::io::Read;
 
-pub fn index<'a>(client: Client<'a>, _params: &JsonValue) -> HandleResult<Client<'a>> {
-    match client.request.read_to_end() {
-        Ok(Some(s)) => handle_inbound_email(&s),
-        _ => panic!("no1"),
-    };
-    client.empty()
+use errors::*;
+
+#[post("/", data = "<data>")]
+pub fn index(data: Data) -> Result<()> {
+    let mut buffer = String::new();
+    data.open().read_to_string(&mut buffer)?;
+    handle_inbound_email(&buffer);
+    Ok(())
 }

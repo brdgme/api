@@ -1,4 +1,6 @@
 language: rust
+rust:
+- nightly
 before_deploy:
 - cargo build --release
 - mkdir deploy/app

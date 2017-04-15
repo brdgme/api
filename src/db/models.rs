@@ -1,10 +1,10 @@
 use uuid::Uuid;
 use chrono::NaiveDateTime;
-use rustless::json::JsonValue;
 
-use std::collections::BTreeMap;
+use brdgme_markup as markup;
 
 use db::schema::*;
+use errors::*;
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[has_many(user_emails)]
@@ -21,18 +21,22 @@ pub struct User {
 }
 
 impl User {
-    pub fn to_public_json(&self) -> JsonValue {
-        JsonValue::Object({
-                              let mut props = BTreeMap::new();
-                              props.insert("id".to_string(),
-                                           JsonValue::String(self.id.to_string()));
-                              props.insert("name".to_string(),
-                                           JsonValue::String(self.name.to_owned()));
-                              props.insert("pref_colors".to_string(), JsonValue::Array(self.pref_colors.iter().map(|pc|
-            JsonValue::String(pc.to_owned())).collect()));
-                              props
-                          })
+    pub fn into_public(self) -> PublicUser {
+        PublicUser {
+            id: self.id,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            name: self.name,
+        }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PublicUser {
+    pub id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub name: String,
 }
 
 #[derive(Insertable)]
@@ -78,7 +82,7 @@ pub struct NewUserAuthToken {
     pub user_id: Uuid,
 }
 
-#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
 #[has_many(game_versions)]
 pub struct GameType {
     pub id: Uuid,
@@ -87,18 +91,7 @@ pub struct GameType {
     pub name: String,
 }
 
-impl GameType {
-    pub fn to_public_json(&self) -> JsonValue {
-        JsonValue::Object({
-                              let mut props = BTreeMap::new();
-                              props.insert("id".to_string(),
-                                           JsonValue::String(self.id.to_string()));
-                              props.insert("name".to_string(),
-                                           JsonValue::String(self.name.to_owned()));
-                              props
-                          })
-    }
-}
+pub type PublicGameType = GameType;
 
 #[derive(Insertable)]
 #[table_name="game_types"]
@@ -106,7 +99,7 @@ pub struct NewGameType<'a> {
     pub name: &'a str,
 }
 
-#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
 #[belongs_to(GameType)]
 #[has_many(games)]
 pub struct GameVersion {
@@ -121,22 +114,28 @@ pub struct GameVersion {
 }
 
 impl GameVersion {
-    pub fn to_public_json(&self) -> JsonValue {
-        JsonValue::Object({
-                              let mut props = BTreeMap::new();
-                              props.insert("id".to_string(),
-                                           JsonValue::String(self.id.to_string()));
-                              props.insert("game_type_id".to_string(),
-                                           JsonValue::String(self.game_type_id.to_string()));
-                              props.insert("name".to_string(),
-                                           JsonValue::String(self.name.to_owned()));
-                              props.insert("is_public".to_string(),
-                                           JsonValue::Bool(self.is_public));
-                              props.insert("is_deprecated".to_string(),
-                                           JsonValue::Bool(self.is_deprecated));
-                              props
-                          })
+    pub fn into_public(self) -> PublicGameVersion {
+        PublicGameVersion {
+            id: self.id,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            game_type_id: self.game_type_id,
+            name: self.name,
+            is_public: self.is_public,
+            is_deprecated: self.is_deprecated,
+        }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PublicGameVersion {
+    pub id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub game_type_id: Uuid,
+    pub name: String,
+    pub is_public: bool,
+    pub is_deprecated: bool,
 }
 
 #[derive(Insertable)]
@@ -162,18 +161,24 @@ pub struct Game {
     pub game_state: String,
 }
 
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct PublicGame {
+    pub id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub game_version_id: Uuid,
+    pub is_finished: bool,
+}
+
 impl Game {
-    pub fn to_public_json(&self) -> JsonValue {
-        JsonValue::Object({
-                              let mut props = BTreeMap::new();
-                              props.insert("id".to_string(),
-                                           JsonValue::String(self.id.to_string()));
-                              props.insert("game_version_id".to_string(),
-                                           JsonValue::String(self.game_version_id.to_string()));
-                              props.insert("is_finished".to_string(),
-                                           JsonValue::Bool(self.is_finished));
-                              props
-                          })
+    pub fn into_public(self) -> PublicGame {
+        PublicGame {
+            id: self.id,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            game_version_id: self.game_version_id,
+            is_finished: self.is_finished,
+        }
     }
 }
 
@@ -185,7 +190,7 @@ pub struct NewGame<'a> {
     pub game_state: &'a str,
 }
 
-#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
 #[belongs_to(Game)]
 #[belongs_to(User)]
 #[has_many(game_log_targets)]
@@ -204,27 +209,7 @@ pub struct GamePlayer {
     pub is_read: bool,
 }
 
-impl GamePlayer {
-    pub fn to_public_json(&self) -> JsonValue {
-        JsonValue::Object({
-                              let mut props = BTreeMap::new();
-                              props.insert("id".to_string(),
-                                           JsonValue::String(self.id.to_string()));
-                              props.insert("position".to_string(),
-                                           JsonValue::U64(self.position as u64));
-                              props.insert("color".to_string(),
-                                           JsonValue::String(self.color.to_owned()));
-                              props.insert("has_accepted".to_string(),
-                                           JsonValue::Bool(self.has_accepted));
-                              props.insert("is_turn".to_string(), JsonValue::Bool(self.is_turn));
-                              props.insert("is_eliminated".to_string(),
-                                           JsonValue::Bool(self.is_eliminated));
-                              props.insert("is_winner".to_string(),
-                                           JsonValue::Bool(self.is_winner));
-                              props
-                          })
-    }
-}
+pub type PublicGamePlayer = GamePlayer;
 
 #[derive(Insertable)]
 #[table_name="game_players"]
@@ -240,7 +225,13 @@ pub struct NewGamePlayer<'a> {
     pub is_read: bool,
 }
 
-#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PublicGamePlayerUser {
+    pub game_player: PublicGamePlayer,
+    pub user: PublicUser,
+}
+
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
 #[belongs_to(Game)]
 #[has_many(game_log_targets)]
 pub struct GameLog {
@@ -253,22 +244,27 @@ pub struct GameLog {
     pub logged_at: NaiveDateTime,
 }
 
+pub type PublicGameLog = GameLog;
+
+#[derive(Serialize, Deserialize)]
+pub struct RenderedGameLog {
+    game_log: PublicGameLog,
+    html: String,
+}
+
 impl GameLog {
-    pub fn to_public_json(&self) -> JsonValue {
-        JsonValue::Object({
-                              let mut props = BTreeMap::new();
-                              props.insert("id".to_string(),
-                                           JsonValue::String(self.id.to_string()));
-                              props.insert("game_id".to_string(),
-                                           JsonValue::String(self.game_id.to_string()));
-                              props.insert("is_public".to_string(),
-                                           JsonValue::Bool(self.is_public));
-                              props.insert("body".to_string(),
-                                           JsonValue::String(self.body.to_owned()));
-                              props.insert("logged_at".to_string(),
-                                           JsonValue::String(self.logged_at.to_string()));
-                              props
-                          })
+    fn render(&self, players: &[markup::Player]) -> Result<String> {
+        let (parsed, _) = markup::from_string(&self.body)
+            .chain_err(|| "error parsing log body")?;
+        Ok(markup::html(&markup::transform(&parsed, players)))
+    }
+
+    pub fn into_rendered(self, players: &[markup::Player]) -> Result<RenderedGameLog> {
+        let html = self.render(players)?;
+        Ok(RenderedGameLog {
+               game_log: self,
+               html: html,
+           })
     }
 }
 
