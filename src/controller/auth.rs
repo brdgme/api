@@ -42,19 +42,30 @@ This confirmation will expire in 30 minutes if not used.",
 }
 
 #[derive(Deserialize)]
-pub struct ConfirmForm {
+pub struct ConfirmRequest {
     email: String,
     confirmation: String,
 }
 
+#[derive(Serialize)]
+pub struct ConfirmResponse {
+    token: String,
+    user_id: Uuid,
+}
+
 #[post("/confirm", data = "<data>")]
-pub fn confirm(data: JSON<ConfirmForm>) -> Result<CORS<JSON<String>>> {
+pub fn confirm(data: JSON<ConfirmRequest>) -> Result<CORS<JSON<ConfirmResponse>>> {
     let data = data.into_inner();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
     match query::user_login_confirm(&data.email, &data.confirmation, conn)
               .chain_err(|| "unable to confirm login")? {
-        Some(token) => Ok(CORS(JSON(token.id.to_string()))),
+        Some(token) => {
+            Ok(CORS(JSON(ConfirmResponse {
+                             token: token.id.to_string(),
+                             user_id: token.user_id,
+                         })))
+        }
         None => Err("unable to confirm login".into()),
     }
 }
