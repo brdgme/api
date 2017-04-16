@@ -73,6 +73,7 @@ fn main() {
             controller::game::show,
             controller::game::command,
             controller::game::version_public,
+            controller::game::my_active,
         ])
         .mount("/auth",
                routes![

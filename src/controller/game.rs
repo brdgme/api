@@ -289,6 +289,7 @@ pub struct MyActiveResponse {
     games: Vec<query::PublicGameExtended>,
 }
 
+#[get("/my_active")]
 pub fn my_active(user: models::User) -> Result<CORS<JSON<MyActiveResponse>>> {
     let conn = &*CONN.r.get().chain_err(|| "unable to get connection")?;
 
