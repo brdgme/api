@@ -241,21 +241,19 @@ pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<
            .map(|&(ref game, _)| {
         let game_version: GameVersion = game_versions::table
             .find(game.game_version_id)
-            .get_result(conn)
-            .unwrap();
+            .get_result(conn)?;
         let game_type: GameType = game_types::table
             .find(game_version.game_type_id)
-            .get_result(conn)
-            .unwrap();
-        let players = find_game_players_with_user_by_game(&game.id, conn).unwrap();
-        GameExtended {
-            game: game.clone(),
-            game_type: game_type,
-            game_version: game_version,
-            game_players: players,
-        }
+            .get_result(conn)?;
+        let players = find_game_players_with_user_by_game(&game.id, conn)?;
+        Ok(GameExtended {
+               game: game.clone(),
+               game_type: game_type,
+               game_version: game_version,
+               game_players: players,
+           })
     })
-           .collect())
+           .collect::<Result<Vec<GameExtended>>>()?)
 }
 
 pub fn find_game_extended(id: &Uuid, conn: &PgConnection) -> Result<GameExtended> {
@@ -308,10 +306,10 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
         rnd.shuffle(&mut users);
 
         // Assign colors to each player using preferences.
-        let color_prefs: Vec<Vec<Color>> = users
+        let color_prefs = users
             .iter()
-            .map(|u| Color::from_strings(&u.pref_colors).unwrap())
-            .collect();
+            .map(|u| Color::from_strings(&u.pref_colors))
+            .collect::<Result<Vec<Vec<Color>>>>()?;
         let player_colors = color::choose(&HashSet::from_iter(color::COLORS.iter()), &color_prefs);
 
         // Create game record.

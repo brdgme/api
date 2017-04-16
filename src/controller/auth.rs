@@ -12,6 +12,7 @@ use errors::*;
 use db::{CONN, query};
 use db::models::*;
 use mail;
+use controller::CORS;
 
 #[derive(Deserialize)]
 pub struct CreateForm {
@@ -19,7 +20,7 @@ pub struct CreateForm {
 }
 
 #[post("/", data = "<data>")]
-pub fn create(data: JSON<CreateForm>) -> Result<()> {
+pub fn create(data: JSON<CreateForm>) -> Result<CORS<()>> {
     let create_email = data.into_inner().email;
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
     let confirmation = query::user_login_request(&create_email, conn)
@@ -37,7 +38,7 @@ This confirmation will expire in 30 minutes if not used.",
                    .chain_err(|| "unable to create login confirmation email")?)
             .chain_err(|| "unable to send login confirmation email")?;
 
-    Ok(())
+    Ok(CORS(()))
 }
 
 #[derive(Deserialize)]
@@ -47,13 +48,13 @@ pub struct ConfirmForm {
 }
 
 #[post("/confirm", data = "<data>")]
-pub fn confirm(data: JSON<ConfirmForm>) -> Result<JSON<String>> {
+pub fn confirm(data: JSON<ConfirmForm>) -> Result<CORS<JSON<String>>> {
     let data = data.into_inner();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
     match query::user_login_confirm(&data.email, &data.confirmation, conn)
               .chain_err(|| "unable to confirm login")? {
-        Some(token) => Ok(JSON(token.id.to_string())),
+        Some(token) => Ok(CORS(JSON(token.id.to_string()))),
         None => Err("unable to confirm login".into()),
     }
 }

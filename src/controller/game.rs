@@ -13,7 +13,7 @@ use db::{query, models};
 use errors::*;
 use db::CONN;
 use game_client;
-use controller::UuidParam;
+use controller::{UuidParam, CORS};
 
 #[derive(Deserialize)]
 pub struct CreateRequest {
@@ -28,7 +28,7 @@ pub struct CreateResponse {
 }
 
 #[post("/", data = "<data>")]
-pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<JSON<CreateResponse>> {
+pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON<CreateResponse>>> {
     let data = data.into_inner();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
@@ -70,7 +70,7 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<JSON<Crea
             Ok(created_game)
         })
         .chain_err(|| "error committing transaction")?;
-    Ok(JSON(CreateResponse { id: created_game.game.id }))
+    Ok(CORS(JSON(CreateResponse { id: created_game.game.id })))
 }
 
 struct StatusValues {
@@ -81,7 +81,6 @@ struct StatusValues {
     stats: Vec<HashMap<String, Stat>>,
 }
 fn game_status_values(status: &Status) -> StatusValues {
-
     let (is_finished, whose_turn, eliminated, winners, stats) = match *status {
         Status::Active {
             ref whose_turn,
@@ -114,7 +113,7 @@ pub struct ShowResponse {
 }
 
 #[get("/<id>")]
-pub fn show(id: UuidParam, user: Option<models::User>) -> Result<JSON<ShowResponse>> {
+pub fn show(id: UuidParam, user: Option<models::User>) -> Result<CORS<JSON<ShowResponse>>> {
     let id = id.into_uuid();
     let conn = &*CONN.r.get().chain_err(|| "error getting connection")?;
 
@@ -157,27 +156,27 @@ pub fn show(id: UuidParam, user: Option<models::User>) -> Result<JSON<ShowRespon
         Some(gp) => query::find_game_logs_for_player(&gp.id, conn),
         None => query::find_public_game_logs_for_game(&game.id, conn),
     }?;
-    Ok(JSON(ShowResponse {
-                game: game.into_public(),
-                pub_state: pub_state,
-                game_version: game_version.into_public(),
-                game_type: game_type,
-                game_players: game_players
-                    .iter()
-                    .map(|&(ref gp, ref u)| {
-                             models::PublicGamePlayerUser {
-                                 game_player: gp.to_owned(),
-                                 user: u.to_owned().into_public(),
-                             }
-                         })
-                    .collect(),
-                game_html: markup::html(&markup::transform(&nodes, &markup_players)),
-                game_logs: game_logs
-                    .into_iter()
-                    .map(|gl| gl.into_rendered(&markup_players).unwrap())
-                    .collect(),
-                command_spec: command_spec,
-            }))
+    Ok(CORS(JSON(ShowResponse {
+                     game: game.into_public(),
+                     pub_state: pub_state,
+                     game_version: game_version.into_public(),
+                     game_type: game_type,
+                     game_players: game_players
+                         .iter()
+                         .map(|&(ref gp, ref u)| {
+                                  models::PublicGamePlayerUser {
+                                      game_player: gp.to_owned(),
+                                      user: u.to_owned().into_public(),
+                                  }
+                              })
+                         .collect(),
+                     game_html: markup::html(&markup::transform(&nodes, &markup_players)),
+                     game_logs: game_logs
+                         .into_iter()
+                         .map(|gl| gl.into_rendered(&markup_players))
+                         .collect::<Result<Vec<models::RenderedGameLog>>>()?,
+                     command_spec: command_spec,
+                 })))
 }
 
 #[derive(Deserialize)]
@@ -186,7 +185,7 @@ pub struct CommandRequest {
 }
 
 #[post("/<id>/command", data = "<data>")]
-pub fn command(id: UuidParam, user: models::User, data: JSON<CommandRequest>) -> Result<()> {
+pub fn command(id: UuidParam, user: models::User, data: JSON<CommandRequest>) -> Result<CORS<()>> {
     let id = id.into_uuid();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
@@ -253,7 +252,7 @@ pub fn command(id: UuidParam, user: models::User, data: JSON<CommandRequest>) ->
         })
         .chain_err(|| "error committing transaction")?;
 
-    Ok(())
+    Ok(CORS(()))
 }
 
 #[derive(Serialize)]
@@ -268,21 +267,21 @@ struct GameVersionType {
 }
 
 #[get("/version_public")]
-pub fn version_public() -> Result<JSON<VersionPublicResponse>> {
+pub fn version_public() -> Result<CORS<JSON<VersionPublicResponse>>> {
     let conn = &*CONN.r.get().chain_err(|| "unable to get connection")?;
 
-    Ok(JSON(VersionPublicResponse {
-                versions: query::public_game_versions(conn)
-                    .chain_err(|| "error getting public game versions")?
-                    .into_iter()
-                    .map(|(game_version, game_type)| {
-                             GameVersionType {
-                                 game_version: game_version.into_public(),
-                                 game_type: game_type,
-                             }
-                         })
-                    .collect(),
-            }))
+    Ok(CORS(JSON(VersionPublicResponse {
+                     versions: query::public_game_versions(conn)
+                         .chain_err(|| "error getting public game versions")?
+                         .into_iter()
+                         .map(|(game_version, game_type)| {
+                                  GameVersionType {
+                                      game_version: game_version.into_public(),
+                                      game_type: game_type,
+                                  }
+                              })
+                         .collect(),
+                 })))
 }
 
 #[derive(Serialize)]
@@ -290,14 +289,14 @@ pub struct MyActiveResponse {
     games: Vec<query::PublicGameExtended>,
 }
 
-pub fn my_active(user: models::User) -> Result<JSON<MyActiveResponse>> {
+pub fn my_active(user: models::User) -> Result<CORS<JSON<MyActiveResponse>>> {
     let conn = &*CONN.r.get().chain_err(|| "unable to get connection")?;
 
-    Ok(JSON(MyActiveResponse {
-                games: query::find_active_games_for_user(&user.id, conn)
-                    .chain_err(|| "error getting active_games")?
-                    .into_iter()
-                    .map(|game_extended| game_extended.into_public())
-                    .collect(),
-            }))
+    Ok(CORS(JSON(MyActiveResponse {
+                     games: query::find_active_games_for_user(&user.id, conn)
+                         .chain_err(|| "error getting active_games")?
+                         .into_iter()
+                         .map(|game_extended| game_extended.into_public())
+                         .collect(),
+                 })))
 }
