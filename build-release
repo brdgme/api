@@ -3,7 +3,7 @@
 set -euo pipefail
 
 rust-musl-builder() {
-    docker run --rm -it -v "$(pwd)":/home/rust/src ekidd/rust-musl-builder:nightly "$@"
+    docker run --rm -it -v "$(pwd)":/home/rust/src brdgme/rust-musl-builder:nightly "$@"
 }
 
 rust-musl-builder cargo build --release
