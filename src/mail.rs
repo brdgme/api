@@ -44,7 +44,7 @@ pub fn html_layout(content: &str) -> String {
             style=\"
                 background-color: white;
                 color: black;
-                font-family: 'Source Code Pro', monospace;
+                font-family: 'Source Code Pro', 'Lucida Console', monospace;
             \"
         >{}</pre>",
             content)
