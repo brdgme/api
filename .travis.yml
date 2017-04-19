@@ -2,6 +2,8 @@ language: rust
 sudo: required
 rust:
 - nightly
+services:
+- docker
 before_deploy:
 - ./build-release
 - cp target/x86_64-unknown-linux-musl/release/brdgme-api deploy/app/brdgme-api
