@@ -2,12 +2,8 @@
 
 set -euo pipefail
 
-rust-musl-builder() {
-    docker run --rm -it -v "$(pwd)":/home/rust/src brdgme/rust-musl-builder:nightly "$@"
-}
-
-rust-musl-builder cargo build --release
-cp target/x86_64-unknown-linux-musl/release/brdgme-api deploy/brdgme-api
+docker run --rm -it -v "$(pwd)":/src brdgme/rust-build
+cp target/release/brdgme-api deploy/brdgme-api
 cd deploy
 rm -f deploy.zip
 zip -r deploy.zip *
