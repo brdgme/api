@@ -1,4 +1,4 @@
 target
 *.bk
-/deploy/app
+/deploy/brdgme-api
 /deploy/deploy.zip
