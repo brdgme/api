@@ -74,6 +74,7 @@ CREATE TABLE games (
   updated_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   game_version_id UUID NOT NULL REFERENCES game_versions (id),
   is_finished BOOL NOT NULL,
+  finished_at TIMESTAMP,
   game_state TEXT NOT NULL
 );
 CREATE TRIGGER update_games_updated_at BEFORE UPDATE ON games FOR EACH ROW EXECUTE PROCEDURE update_updated_at();
@@ -88,9 +89,12 @@ CREATE TABLE game_players (
   color VARCHAR NOT NULL,
   has_accepted BOOL NOT NULL,
   is_turn BOOL NOT NULL,
+  is_turn_at TIMESTAMP NOT NULL,
+  last_turn_at TIMESTAMP NOT NULL,
   is_eliminated BOOL NOT NULL,
   is_winner BOOL NOT NULL,
   is_read BOOL NOT NULL,
+  points REAL,
   UNIQUE (game_id, user_id),
   UNIQUE (game_id, color),
   UNIQUE (game_id, position)
@@ -116,3 +120,25 @@ CREATE TABLE game_log_targets (
   game_player_id UUID NOT NULL REFERENCES game_players (id)
 );
 CREATE TRIGGER update_game_log_targets_updated_at BEFORE UPDATE ON game_log_targets FOR EACH ROW EXECUTE PROCEDURE update_updated_at();
+
+CREATE TABLE game_type_users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  updated_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  game_type_id UUID NOT NULL REFERENCES game_types (id),
+  user_id UUID NOT NULL REFERENCES users (id),
+  last_game_finished_at TIMESTAMP,
+  rating INT NOT NULL DEFAULT 1200,
+  peak_rating INT NOT NULL DEFAULT 1200
+);
+CREATE TRIGGER update_game_type_users_updated_at BEFORE UPDATE ON game_type_users FOR EACH ROW EXECUTE PROCEDURE update_updated_at();
+
+CREATE TABLE friends (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  updated_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  source_user_id UUID NOT NULL REFERENCES users (id),
+  target_user_id UUID NOT NULL REFERENCES users (id) CHECK (target_user_id != source_user_id),
+  has_accepted BOOL
+);
+CREATE TRIGGER update_friends_updated_at BEFORE UPDATE ON friends FOR EACH ROW EXECUTE PROCEDURE update_updated_at();

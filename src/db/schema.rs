@@ -59,6 +59,7 @@ table! {
         updated_at -> Timestamp,
         game_version_id -> Uuid,
         is_finished -> Bool,
+        finished_at -> Nullable<Timestamp>,
         game_state -> Text,
     }
 }
@@ -74,9 +75,12 @@ table! {
         color -> VarChar,
         has_accepted -> Bool,
         is_turn -> Bool,
+        is_turn_at -> Timestamp,
+        last_turn_at -> Timestamp,
         is_eliminated -> Bool,
         is_winner -> Bool,
         is_read -> Bool,
+        points -> Nullable<Float>,
     }
 }
 
@@ -99,5 +103,29 @@ table! {
         updated_at -> Timestamp,
         game_log_id -> Uuid,
         game_player_id -> Uuid,
+    }
+}
+
+table! {
+    game_type_users {
+        id -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        game_type_id -> Uuid,
+        user_id -> Uuid,
+        last_game_finished_at -> Timestamp,
+        rating -> Integer,
+        peak_rating -> Integer,
+    }
+}
+
+table! {
+    friends {
+        id -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        source_user_id -> Uuid,
+        target_user_id -> Uuid,
+        has_accepted -> Nullable<Bool>,
     }
 }

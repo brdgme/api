@@ -285,11 +285,14 @@ pub struct CreateGameOpts<'a> {
     pub whose_turn: &'a [usize],
     pub eliminated: &'a [usize],
     pub winners: &'a [usize],
+    pub points: &'a [f32],
     pub creator_id: &'a Uuid,
     pub opponent_ids: &'a [Uuid],
     pub opponent_emails: &'a [String],
 }
 pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Result<CreatedGame> {
+    // We get the timestamp for now before logs are created to make sure players can read them.
+    let now = UTC::now().naive_utc();
     conn.transaction(|| {
 
         // Find or create users.
@@ -326,9 +329,12 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
                                                  color: &player_colors[pos].to_string(),
                                                  has_accepted: user.id == *opts.creator_id,
                                                  is_turn: opts.whose_turn.contains(&pos),
+                                                 is_turn_at: now,
+                                                 last_turn_at: now,
                                                  is_eliminated: opts.eliminated.contains(&pos),
                                                  is_winner: opts.winners.contains(&pos),
                                                  is_read: false,
+                                                 points: opts.points.get(pos).cloned(),
                                              },
                                             conn)
                                  .chain_err(|| "could not create game player")?);
@@ -841,9 +847,12 @@ mod tests {
                                       color: &Color::Green.to_string(),
                                       has_accepted: true,
                                       is_turn: false,
+                                      is_turn_at: UTC::now().naive_utc(),
+                                      last_turn_at: UTC::now().naive_utc(),
                                       is_eliminated: false,
                                       is_winner: false,
                                       is_read: false,
+                                      points: None,
                                   },
                                   NewGamePlayer {
                                       game_id: game.id,
@@ -852,9 +861,12 @@ mod tests {
                                       color: &Color::Red.to_string(),
                                       has_accepted: false,
                                       is_turn: true,
+                                      is_turn_at: UTC::now().naive_utc(),
+                                      last_turn_at: UTC::now().naive_utc(),
                                       is_eliminated: false,
                                       is_winner: false,
                                       is_read: false,
+                                      points: Some(1.5),
                                   }],
                                 conn)
                     .unwrap();

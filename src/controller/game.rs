@@ -59,6 +59,7 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
                                                    whose_turn: &status.whose_turn,
                                                    eliminated: &status.eliminated,
                                                    winners: &status.winners,
+                                                   points: &game_info.points,
                                                    creator_id: &user.id,
                                                    opponent_ids: &opponent_ids,
                                                    opponent_emails: &opponent_emails,

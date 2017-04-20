@@ -1,3 +1,5 @@
+DROP TABLE friends;
+DROP TABLE game_type_users;
 DROP TABLE game_log_targets;
 DROP TABLE game_logs;
 DROP TABLE game_players;

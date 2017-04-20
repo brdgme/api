@@ -84,6 +84,7 @@ pub struct NewUserAuthToken {
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
 #[has_many(game_versions)]
+#[has_many(game_type_users)]
 pub struct GameType {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -158,6 +159,7 @@ pub struct Game {
     pub updated_at: NaiveDateTime,
     pub game_version_id: Uuid,
     pub is_finished: bool,
+    pub finished_at: Option<NaiveDateTime>,
     pub game_state: String,
 }
 
@@ -204,9 +206,12 @@ pub struct GamePlayer {
     pub color: String,
     pub has_accepted: bool,
     pub is_turn: bool,
+    pub is_turn_at: NaiveDateTime,
+    pub last_turn_at: NaiveDateTime,
     pub is_eliminated: bool,
     pub is_winner: bool,
     pub is_read: bool,
+    pub points: Option<f32>,
 }
 
 pub type PublicGamePlayer = GamePlayer;
@@ -220,9 +225,12 @@ pub struct NewGamePlayer<'a> {
     pub color: &'a str,
     pub has_accepted: bool,
     pub is_turn: bool,
+    pub is_turn_at: NaiveDateTime,
+    pub last_turn_at: NaiveDateTime,
     pub is_eliminated: bool,
     pub is_winner: bool,
     pub is_read: bool,
+    pub points: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -293,6 +301,49 @@ pub struct GameLogTarget {
 pub struct NewGameLogTarget {
     pub game_log_id: Uuid,
     pub game_player_id: Uuid,
+}
+
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[belongs_to(GameType)]
+#[belongs_to(User)]
+pub struct GameTypeUser {
+    pub id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub game_type_id: Uuid,
+    pub user_id: Uuid,
+    pub last_game_finished_at: Option<NaiveDateTime>,
+    pub rating: i32,
+    pub peak_rating: i32,
+}
+
+#[derive(Insertable)]
+#[table_name="game_type_users"]
+pub struct NewGameTypeUser {
+    pub game_type_id: Uuid,
+    pub user_id: Uuid,
+    pub last_game_finished_at: Option<NaiveDateTime>,
+    pub rating: i32,
+    pub peak_rating: i32,
+}
+
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[belongs_to(User, foreign_key="target_user_id")]
+pub struct Friend {
+    pub id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub source_user_id: Uuid,
+    pub target_user_id: Uuid,
+    pub has_accepted: Option<bool>,
+}
+
+#[derive(Insertable)]
+#[table_name="friends"]
+pub struct NewFriend {
+    pub source_user_id: Uuid,
+    pub target_user_id: Uuid,
+    pub has_accepted: Option<bool>,
 }
 
 #[cfg(test)]
