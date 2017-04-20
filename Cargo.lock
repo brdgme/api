@@ -101,7 +101,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "brdgme-cmd"
 version = "0.1.0"
-source = "git+https://github.com/brdgme/cmd.git#052e557be3e41096c9d577c42f3b7ddb3822db85"
+source = "git+https://github.com/brdgme/cmd.git#abeca3b8b6afa14ab40bc5c0dd2d3f07eee3e051"
 dependencies = [
  "brdgme-color 0.1.0 (git+https://github.com/brdgme/color.git)",
  "brdgme-game 0.1.0 (git+https://github.com/brdgme/game.git)",

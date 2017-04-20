@@ -390,6 +390,7 @@ pub fn player_cannot_undo_set_undo_game_state(game_id: &Uuid,
         .chain_err(|| "error updating game players undo_game_state to None")
 }
 
+
 pub struct UpdatedGame {
     pub game: Option<Game>,
     pub whose_turn: Vec<GamePlayer>,
@@ -398,19 +399,15 @@ pub struct UpdatedGame {
 }
 pub fn update_game_command_success(game_id: &Uuid,
                                    update: &NewGame,
-                                   game_player_id: &Uuid,
-                                   can_undo: bool,
+                                   undo_game_state: Option<(&Uuid, &str)>,
                                    whose_turn: &[usize],
                                    eliminated: &[usize],
                                    winners: &[usize],
                                    conn: &PgConnection)
                                    -> Result<UpdatedGame> {
     conn.transaction(|| {
-        if can_undo {
-            player_can_undo_set_undo_game_state(game_id,
-                                                game_player_id,
-                                                &find_game(game_id, conn)?.game_state,
-                                                conn)?;
+        if let Some((game_player_id, game_state)) = undo_game_state {
+            player_can_undo_set_undo_game_state(game_id, game_player_id, game_state, conn)?;
         } else {
             player_cannot_undo_set_undo_game_state(game_id, conn)?;
         }

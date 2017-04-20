@@ -186,75 +186,114 @@ pub struct CommandRequest {
 }
 
 #[post("/<id>/command", data = "<data>")]
-pub fn command(id: UuidParam, user: models::User, data: JSON<CommandRequest>) -> Result<CORS<()>> {
+pub fn command(id: UuidParam,
+               user: models::User,
+               data: JSON<CommandRequest>)
+               -> Result<CORS<JSON<query::PublicGameExtended>>> {
     let id = id.into_uuid();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
     conn.transaction::<_, Error, _>(|| {
 
-            let (game, game_version) = query::find_game_with_version(&id, conn)
-                .chain_err(|| "error finding game")?
-                .ok_or_else::<Error, _>(|| {
-                                            ErrorKind::UserError("game does not exist".to_string())
-                                                .into()
-                                        })?;
-            let players: Vec<(models::GamePlayer, models::User)> =
-                query::find_game_players_with_user_by_game(&id, conn)
-                    .chain_err(|| "error finding game players")?;
-            let player: &models::GamePlayer =
-                &players
-                     .iter()
-                     .find(|&&(ref p, _)| p.user_id == user.id)
-                     .ok_or_else::<Error, _>(|| "you are not a player in this game".into())?
-                     .0;
-            let position = player.position;
+        let (game, game_version) = query::find_game_with_version(&id, conn)
+            .chain_err(|| "error finding game")?
+            .ok_or_else::<Error, _>(|| {
+                                        ErrorKind::UserError("game does not exist".to_string())
+                                            .into()
+                                    })?;
+        let players: Vec<(models::GamePlayer, models::User)> =
+            query::find_game_players_with_user_by_game(&id, conn)
+                .chain_err(|| "error finding game players")?;
+        let player: &models::GamePlayer =
+            &players
+                 .iter()
+                 .find(|&&(ref p, _)| p.user_id == user.id)
+                 .ok_or_else::<Error, _>(|| "you are not a player in this game".into())?
+                 .0;
+        let position = player.position;
 
-            let names = players
-                .iter()
-                .map(|&(_, ref user)| user.name.clone())
-                .collect::<Vec<String>>();
+        let names = players
+            .iter()
+            .map(|&(_, ref user)| user.name.clone())
+            .collect::<Vec<String>>();
 
-            let (game_response, logs, can_undo, remaining_command) =
-                match game_client::request(&game_version.uri,
-                                           &cli::Request::Play {
-                                                player: position as usize,
-                                                game: game.game_state,
-                                                command: data.command.to_owned(),
-                                                names: names,
-                                            })? {
-                    cli::Response::Play {
-                        game,
-                        logs,
-                        can_undo,
-                        remaining_input,
-                    } => (game, logs, can_undo, remaining_input),
-                    _ => bail!("invalid response type"),
-                };
-            let status = game_status_values(&game_response.status);
+        let (game_response, logs, can_undo, remaining_command) =
+            match game_client::request(&game_version.uri,
+                                       &cli::Request::Play {
+                                            player: position as usize,
+                                            game: game.game_state.clone(),
+                                            command: data.command.to_owned(),
+                                            names: names,
+                                        })? {
+                cli::Response::Play {
+                    game,
+                    logs,
+                    can_undo,
+                    remaining_input,
+                } => (game, logs, can_undo, remaining_input),
+                _ => bail!("invalid response type"),
+            };
+        let status = game_status_values(&game_response.status);
 
-            let updated = query::update_game_command_success(&id,
-                                                             &models::NewGame {
-                                                                  game_version_id:
-                                                                      game.game_version_id,
-                                                                  is_finished: status.is_finished,
-                                                                  game_state: &game_response.state,
-                                                              },
-                                                             &player.id,
-                                                             can_undo,
-                                                             &status.whose_turn,
-                                                             &status.eliminated,
-                                                             &status.winners,
-                                                             conn)
-                    .chain_err(|| "error updating game")?;
+        let updated = query::update_game_command_success(&id,
+                                                         &models::NewGame {
+                                                              game_version_id: game.game_version_id,
+                                                              is_finished: status.is_finished,
+                                                              game_state: &game_response.state,
+                                                          },
+                                                         if can_undo {
+                                                             Some((&player.id, &game.game_state))
+                                                         } else {
+                                                             None
+                                                         },
+                                                         &status.whose_turn,
+                                                         &status.eliminated,
+                                                         &status.winners,
+                                                         conn)
+                .chain_err(|| "error updating game")?;
 
-            let created_logs = query::create_game_logs_from_cli(&id, logs, conn)
-                .chain_err(|| "unable to create game logs")?;
-            Ok(updated)
+        let created_logs = query::create_game_logs_from_cli(&id, logs, conn)
+            .chain_err(|| "unable to create game logs")?;
+        Ok(CORS(JSON(query::find_game_extended(&id, conn)?.into_public())))
+    })
 
-        })
-        .chain_err(|| "error committing transaction")?;
+}
 
-    Ok(CORS(()))
+#[post("/<id>/undo")]
+pub fn undo(id: UuidParam, user: models::User) -> Result<CORS<JSON<query::PublicGameExtended>>> {
+    let id = id.into_uuid();
+    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+
+    conn.transaction::<_, Error, _>(|| {
+
+        let (game, game_version) = query::find_game_with_version(&id, conn)
+            .chain_err(|| "error finding game")?
+            .ok_or_else::<Error, _>(|| {
+                                        ErrorKind::UserError("game does not exist".to_string())
+                                            .into()
+                                    })?;
+
+        let game_response =
+            match game_client::request(&game_version.uri,
+                                       &cli::Request::Status { game: game.game_state.clone() })? {
+                cli::Response::Status { game } => (game),
+                _ => bail!("invalid response type"),
+            };
+        let status = game_status_values(&game_response.status);
+        let updated = query::update_game_command_success(&id,
+                                                         &models::NewGame {
+                                                              game_version_id: game.game_version_id,
+                                                              is_finished: status.is_finished,
+                                                              game_state: &game_response.state,
+                                                          },
+                                                         None,
+                                                         &status.whose_turn,
+                                                         &status.eliminated,
+                                                         &status.winners,
+                                                         conn)
+                .chain_err(|| "error updating game")?;
+        Ok(CORS(JSON(query::find_game_extended(&id, conn)?.into_public())))
+    })
 }
 
 #[derive(Serialize)]

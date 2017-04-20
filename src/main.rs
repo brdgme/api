@@ -75,6 +75,7 @@ fn main() {
             controller::game::command,
             controller::game::version_public,
             controller::game::my_active,
+            controller::game::undo,
         ])
         .mount("/auth",
                routes![
