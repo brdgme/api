@@ -212,6 +212,7 @@ pub struct GamePlayer {
     pub is_winner: bool,
     pub is_read: bool,
     pub points: Option<f32>,
+    pub undo_game_state: Option<String>,
 }
 
 pub type PublicGamePlayer = GamePlayer;
@@ -231,6 +232,7 @@ pub struct NewGamePlayer<'a> {
     pub is_winner: bool,
     pub is_read: bool,
     pub points: Option<f32>,
+    pub undo_game_state: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

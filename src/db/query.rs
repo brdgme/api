@@ -168,6 +168,15 @@ pub fn authenticate(search_email: &str,
         .chain_err(|| "error finding user")
 }
 
+pub fn find_game(id: &Uuid, conn: &PgConnection) -> Result<Game> {
+    use db::schema::games;
+
+    games::table
+        .find(id)
+        .first(conn)
+        .chain_err(|| "error finding game")
+}
+
 pub fn find_game_version(id: &Uuid, conn: &PgConnection) -> Result<Option<GameVersion>> {
     use db::schema::game_versions;
 
@@ -335,6 +344,7 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
                                                  is_winner: opts.winners.contains(&pos),
                                                  is_read: false,
                                                  points: opts.points.get(pos).cloned(),
+                                                 undo_game_state: None,
                                              },
                                             conn)
                                  .chain_err(|| "could not create game player")?);
@@ -347,20 +357,63 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
     })
 }
 
+pub fn player_can_undo_set_undo_game_state(game_id: &Uuid,
+                                           game_player_id: &Uuid,
+                                           game_state: &str,
+                                           conn: &PgConnection)
+                                           -> Result<()> {
+    use db::schema::game_players;
+    conn.transaction(|| {
+        diesel::update(game_players::table
+                           .find(game_player_id)
+                           .filter(game_players::undo_game_state.eq(None::<String>)))
+                .set(game_players::undo_game_state.eq(game_state))
+                .execute(conn)
+                .chain_err(|| "error updating game player undo_game_state to game_state")?;
+        diesel::update(game_players::table
+                           .filter(game_players::game_id.eq(game_id))
+                           .filter(game_players::id.ne(game_player_id)))
+                .set(game_players::undo_game_state.eq(None::<String>))
+                .execute(conn)
+                .chain_err(|| "error update game players undo_game_state to None")?;
+        Ok(())
+    })
+}
+
+pub fn player_cannot_undo_set_undo_game_state(game_id: &Uuid,
+                                              conn: &PgConnection)
+                                              -> Result<Vec<GamePlayer>> {
+    use db::schema::game_players;
+    diesel::update(game_players::table.filter(game_players::game_id.eq(game_id)))
+        .set(game_players::undo_game_state.eq(None::<String>))
+        .get_results(conn)
+        .chain_err(|| "error updating game players undo_game_state to None")
+}
+
 pub struct UpdatedGame {
     pub game: Option<Game>,
     pub whose_turn: Vec<GamePlayer>,
     pub eliminated: Vec<GamePlayer>,
     pub winners: Vec<GamePlayer>,
 }
-pub fn update_game_and_players(game_id: &Uuid,
-                               update: &NewGame,
-                               whose_turn: &[usize],
-                               eliminated: &[usize],
-                               winners: &[usize],
-                               conn: &PgConnection)
-                               -> Result<UpdatedGame> {
+pub fn update_game_command_success(game_id: &Uuid,
+                                   update: &NewGame,
+                                   game_player_id: &Uuid,
+                                   can_undo: bool,
+                                   whose_turn: &[usize],
+                                   eliminated: &[usize],
+                                   winners: &[usize],
+                                   conn: &PgConnection)
+                                   -> Result<UpdatedGame> {
     conn.transaction(|| {
+        if can_undo {
+            player_can_undo_set_undo_game_state(game_id,
+                                                game_player_id,
+                                                &find_game(game_id, conn)?.game_state,
+                                                conn)?;
+        } else {
+            player_cannot_undo_set_undo_game_state(game_id, conn)?;
+        }
         let result = UpdatedGame {
             game: update_game(game_id, update, conn)?,
             whose_turn: update_game_whose_turn(game_id, whose_turn, conn)?,
@@ -853,6 +906,7 @@ mod tests {
                                       is_winner: false,
                                       is_read: false,
                                       points: None,
+                                      undo_game_state: None,
                                   },
                                   NewGamePlayer {
                                       game_id: game.id,
@@ -867,9 +921,66 @@ mod tests {
                                       is_winner: false,
                                       is_read: false,
                                       points: Some(1.5),
+                                      undo_game_state: None,
                                   }],
                                 conn)
                     .unwrap();
+        });
+    }
+
+    #[test]
+    #[ignore]
+    fn player_can_undo_set_undo_game_state_works() {
+        with_db(|conn| {
+            let (_, p1) = create_user_by_email("beefsack@gmail.com", conn).unwrap();
+            let (_, p2) = create_user_by_email("beefsack+two@gmail.com", conn).unwrap();
+            let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
+            let game_version = create_game_version(&NewGameVersion {
+                                                        game_type_id: game_type.id,
+                                                        uri: "https://example.com/lost-cities-1",
+                                                        name: "v1",
+                                                        is_public: true,
+                                                        is_deprecated: false,
+                                                    },
+                                                   conn)
+                    .unwrap();
+            let game = create_game(&NewGame {
+                                        game_version_id: game_version.id,
+                                        is_finished: false,
+                                        game_state: "egg",
+                                    },
+                                   conn)
+                    .unwrap();
+            player_can_undo_set_undo_game_state(&game.id, &p1.id, "{}", conn)
+                .expect("failed to update player game undo state");
+        });
+    }
+
+    #[test]
+    #[ignore]
+    fn player_cannot_undo_set_undo_game_state_works() {
+        with_db(|conn| {
+            let (_, p1) = create_user_by_email("beefsack@gmail.com", conn).unwrap();
+            let (_, p2) = create_user_by_email("beefsack+two@gmail.com", conn).unwrap();
+            let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
+            let game_version = create_game_version(&NewGameVersion {
+                                                        game_type_id: game_type.id,
+                                                        uri: "https://example.com/lost-cities-1",
+                                                        name: "v1",
+                                                        is_public: true,
+                                                        is_deprecated: false,
+                                                    },
+                                                   conn)
+                    .unwrap();
+            let game = create_game(&NewGame {
+                                        game_version_id: game_version.id,
+                                        is_finished: false,
+                                        game_state: "egg",
+                                    },
+                                   conn)
+                    .unwrap();
+            player_cannot_undo_set_undo_game_state(&game.id, conn)
+                .expect("failed to update player game undo state");
         });
     }
 }

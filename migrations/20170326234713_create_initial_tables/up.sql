@@ -22,9 +22,9 @@ CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   created_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
-  name VARCHAR NOT NULL UNIQUE,
-  pref_colors VARCHAR[] NOT NULL,
-  login_confirmation VARCHAR,
+  name TEXT NOT NULL UNIQUE,
+  pref_colors TEXT[] NOT NULL,
+  login_confirmation TEXT,
   login_confirmation_at TIMESTAMP
 );
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE PROCEDURE update_updated_at();
@@ -34,7 +34,7 @@ CREATE TABLE user_emails (
   created_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   user_id UUID NOT NULL REFERENCES users (id),
-  email VARCHAR NOT NULL UNIQUE,
+  email TEXT NOT NULL UNIQUE,
   is_primary BOOL NOT NULL
 );
 CREATE TRIGGER update_user_emails_updated_at BEFORE UPDATE ON user_emails FOR EACH ROW EXECUTE PROCEDURE update_updated_at();
@@ -51,7 +51,7 @@ CREATE TABLE game_types (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   created_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
-  name VARCHAR NOT NULL
+  name TEXT NOT NULL
 );
 CREATE TRIGGER update_game_types_updated_at BEFORE UPDATE ON game_types FOR EACH ROW EXECUTE PROCEDURE update_updated_at();
 
@@ -60,8 +60,8 @@ CREATE TABLE game_versions (
   created_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   game_type_id UUID NOT NULL REFERENCES game_types (id),
-  name VARCHAR NOT NULL,
-  uri VARCHAR NOT NULL,
+  name TEXT NOT NULL,
+  uri TEXT NOT NULL,
   is_public BOOL NOT NULL,
   is_deprecated BOOL NOT NULL,
   UNIQUE (game_type_id, name)
@@ -86,7 +86,7 @@ CREATE TABLE game_players (
   game_id UUID NOT NULL REFERENCES games (id),
   user_id UUID NOT NULL REFERENCES users (id),
   position INT NOT NULL,
-  color VARCHAR NOT NULL,
+  color TEXT NOT NULL,
   has_accepted BOOL NOT NULL,
   is_turn BOOL NOT NULL,
   is_turn_at TIMESTAMP NOT NULL,
@@ -95,6 +95,7 @@ CREATE TABLE game_players (
   is_winner BOOL NOT NULL,
   is_read BOOL NOT NULL,
   points REAL,
+  undo_game_state TEXT,
   UNIQUE (game_id, user_id),
   UNIQUE (game_id, color),
   UNIQUE (game_id, position)

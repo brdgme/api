@@ -26,7 +26,7 @@ rocket_contrib = "0.2.4"
 email = "0.0.16"
 hyper = "0.10.7"
 hyper-native-tls = "0.2.2"
-diesel = { version = "0.12.0", features = ["postgres", "uuid", "chrono"] }
+diesel = { version = "0.12.0", features = ["postgres", "uuid", "chrono", "large-tables"] }
 diesel_codegen = { version = "0.12.0", features = ["postgres"] }
 r2d2-diesel = "0.12.0"
 unicase = "1.4.0"

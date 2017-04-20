@@ -198,18 +198,16 @@ pub fn command(id: UuidParam, user: models::User, data: JSON<CommandRequest>) ->
                                             ErrorKind::UserError("game does not exist".to_string())
                                                 .into()
                                         })?;
-            let players = query::find_game_players_with_user_by_game(&id, conn)
-                .chain_err(|| "error finding game players")?;
-            let position = players
-                .iter()
-                .find(|&&(ref p, _)| p.user_id == user.id)
-                .ok_or_else::<Error, _>(|| {
-                                            ErrorKind::UserError("you are not a player in this game"
-                                                                     .to_string())
-                                                    .into()
-                                        })?
-                .0
-                .position;
+            let players: Vec<(models::GamePlayer, models::User)> =
+                query::find_game_players_with_user_by_game(&id, conn)
+                    .chain_err(|| "error finding game players")?;
+            let player: &models::GamePlayer =
+                &players
+                     .iter()
+                     .find(|&&(ref p, _)| p.user_id == user.id)
+                     .ok_or_else::<Error, _>(|| "you are not a player in this game".into())?
+                     .0;
+            let position = player.position;
 
             let names = players
                 .iter()
@@ -234,16 +232,19 @@ pub fn command(id: UuidParam, user: models::User, data: JSON<CommandRequest>) ->
                 };
             let status = game_status_values(&game_response.status);
 
-            let updated = query::update_game_and_players(&id,
-                                                         &models::NewGame {
-                                                              game_version_id: game.game_version_id,
-                                                              is_finished: status.is_finished,
-                                                              game_state: &game_response.state,
-                                                          },
-                                                         &status.whose_turn,
-                                                         &status.eliminated,
-                                                         &status.winners,
-                                                         conn)
+            let updated = query::update_game_command_success(&id,
+                                                             &models::NewGame {
+                                                                  game_version_id:
+                                                                      game.game_version_id,
+                                                                  is_finished: status.is_finished,
+                                                                  game_state: &game_response.state,
+                                                              },
+                                                             &player.id,
+                                                             can_undo,
+                                                             &status.whose_turn,
+                                                             &status.eliminated,
+                                                             &status.winners,
+                                                             conn)
                     .chain_err(|| "error updating game")?;
 
             let created_logs = query::create_game_logs_from_cli(&id, logs, conn)

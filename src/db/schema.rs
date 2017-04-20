@@ -3,9 +3,9 @@ table! {
         id -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
-        name -> VarChar,
-        pref_colors -> Array<VarChar>,
-        login_confirmation -> Nullable<VarChar>,
+        name -> Text,
+        pref_colors -> Array<Text>,
+        login_confirmation -> Nullable<Text>,
         login_confirmation_at -> Nullable<Timestamp>,
     }
 }
@@ -16,7 +16,7 @@ table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         user_id -> Uuid,
-        email -> VarChar,
+        email -> Text,
         is_primary -> Bool,
     }
 }
@@ -72,7 +72,7 @@ table! {
         game_id -> Uuid,
         user_id -> Uuid,
         position -> Integer,
-        color -> VarChar,
+        color -> Text,
         has_accepted -> Bool,
         is_turn -> Bool,
         is_turn_at -> Timestamp,
@@ -81,6 +81,7 @@ table! {
         is_winner -> Bool,
         is_read -> Bool,
         points -> Nullable<Float>,
+        undo_game_state -> Nullable<Text>,
     }
 }
 
