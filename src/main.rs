@@ -66,7 +66,6 @@ mod errors {
 }
 
 fn main() {
-    env_logger::init().unwrap();
     rocket::ignite()
         .mount("/game",
                routes![
