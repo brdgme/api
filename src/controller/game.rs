@@ -1,6 +1,7 @@
 use rocket_contrib::JSON;
 use uuid::Uuid;
 use diesel::Connection;
+use diesel::pg::PgConnection;
 
 use brdgme_cmd::cli;
 use brdgme_game::{Status, Stat};
@@ -118,25 +119,29 @@ pub fn show(id: UuidParam, user: Option<models::User>) -> Result<CORS<JSON<ShowR
     let id = id.into_uuid();
     let conn = &*CONN.r.get().chain_err(|| "error getting connection")?;
 
-    let query::GameExtended {
-        game,
-        game_version,
-        game_type,
-        game_players,
-    } = query::find_game_extended(&id, conn)?;
+    let game_extended = query::find_game_extended(&id, conn)?;
     let game_player: Option<&models::GamePlayer> = user.and_then(|u| {
-        game_players
+        game_extended
+            .game_players
             .iter()
             .find(|&&(ref gp, _)| u.id == gp.user_id)
             .map(|&(ref gp, _)| gp)
     });
+    Ok(CORS(JSON(game_extended_to_show_response(game_player, &game_extended, conn)?)))
+}
 
+fn game_extended_to_show_response(game_player: Option<&models::GamePlayer>,
+                                  game_extended: &query::GameExtended,
+                                  conn: &PgConnection)
+                                  -> Result<ShowResponse> {
+    let public = game_extended.clone().into_public();
     let (pub_state, render, command_spec) =
-        match game_client::request(&game_version.uri,
+        match game_client::request(&game_extended.game_version.uri,
                                    &cli::Request::Render {
                                         player: game_player.map(|gp| gp.position as usize),
-                                        game: game.game_state.to_owned(),
-                                        names: game_players
+                                        game: game_extended.game.game_state.to_owned(),
+                                        names: game_extended
+                                            .game_players
                                             .iter()
                                             .map(|&(_, ref u)| u.name.to_owned())
                                             .collect(),
@@ -152,32 +157,25 @@ pub fn show(id: UuidParam, user: Option<models::User>) -> Result<CORS<JSON<ShowR
     let (nodes, _) = markup::from_string(&render)
         .chain_err(|| "error parsing render markup")?;
 
-    let markup_players = game_client::game_players_to_markup_players(&game_players);
+    let markup_players = game_client::game_players_to_markup_players(&game_extended.game_players);
     let game_logs = match game_player {
         Some(gp) => query::find_game_logs_for_player(&gp.id, conn),
-        None => query::find_public_game_logs_for_game(&game.id, conn),
+        None => query::find_public_game_logs_for_game(&game_extended.game.id, conn),
     }?;
-    Ok(CORS(JSON(ShowResponse {
-                     game: game.into_public(),
-                     pub_state: pub_state,
-                     game_version: game_version.into_public(),
-                     game_type: game_type,
-                     game_players: game_players
-                         .iter()
-                         .map(|&(ref gp, ref u)| {
-                                  models::PublicGamePlayerUser {
-                                      game_player: gp.to_owned(),
-                                      user: u.to_owned().into_public(),
-                                  }
-                              })
-                         .collect(),
-                     game_html: markup::html(&markup::transform(&nodes, &markup_players)),
-                     game_logs: game_logs
-                         .into_iter()
-                         .map(|gl| gl.into_rendered(&markup_players))
-                         .collect::<Result<Vec<models::RenderedGameLog>>>()?,
-                     command_spec: command_spec,
-                 })))
+
+    Ok(ShowResponse {
+           game: public.game,
+           pub_state: pub_state,
+           game_version: public.game_version,
+           game_type: public.game_type,
+           game_players: public.game_players,
+           game_html: markup::html(&markup::transform(&nodes, &markup_players)),
+           game_logs: game_logs
+               .into_iter()
+               .map(|gl| gl.into_rendered(&markup_players))
+               .collect::<Result<Vec<models::RenderedGameLog>>>()?,
+           command_spec: command_spec,
+       })
 }
 
 #[derive(Deserialize)]
@@ -189,7 +187,7 @@ pub struct CommandRequest {
 pub fn command(id: UuidParam,
                user: models::User,
                data: JSON<CommandRequest>)
-               -> Result<CORS<JSON<query::PublicGameExtended>>> {
+               -> Result<CORS<JSON<ShowResponse>>> {
     let id = id.into_uuid();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
@@ -231,6 +229,7 @@ pub fn command(id: UuidParam,
                     can_undo,
                     remaining_input,
                 } => (game, logs, can_undo, remaining_input),
+                cli::Response::UserError { message } => bail!(ErrorKind::UserError(message)),
                 _ => bail!("invalid response type"),
             };
         let status = game_status_values(&game_response.status);
@@ -252,11 +251,16 @@ pub fn command(id: UuidParam,
                                                          conn)
                 .chain_err(|| "error updating game")?;
 
-        let created_logs = query::create_game_logs_from_cli(&id, logs, conn)
+        query::create_game_logs_from_cli(&id, logs, conn)
             .chain_err(|| "unable to create game logs")?;
-        Ok(CORS(JSON(query::find_game_extended(&id, conn)?.into_public())))
+        Ok(CORS(JSON(
+            game_extended_to_show_response(
+                Some(player),
+                &query::find_game_extended(&id, conn).chain_err(|| "unable to get extended game")?,
+                conn,
+            )?
+        )))
     })
-
 }
 
 #[post("/<id>/undo")]

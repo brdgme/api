@@ -200,6 +200,7 @@ pub fn find_game_with_version(id: &Uuid,
         .chain_err(|| "error finding game")
 }
 
+#[derive(Clone)]
 pub struct GameExtended {
     pub game: Game,
     pub game_type: GameType,

@@ -129,7 +129,7 @@ dependencies = [
 [[package]]
 name = "brdgme-game"
 version = "0.1.0"
-source = "git+https://github.com/brdgme/game.git#87067cdbf6ccb3eb3e2bb5bbb497669a2085d63f"
+source = "git+https://github.com/brdgme/game.git#910077f4d58eedfbc296c0069018e57aa2f1c179"
 dependencies = [
  "brdgme-markup 0.1.0 (git+https://github.com/brdgme/markup.git)",
  "chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
