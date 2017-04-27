@@ -4,7 +4,7 @@ use diesel::Connection;
 
 use brdgme_cmd::cli;
 use brdgme_game::{Status, Stat};
-use brdgme_game::command::Specs as CommandSpecs;
+use brdgme_game::command::Spec as CommandSpec;
 use brdgme_markup as markup;
 
 use std::collections::HashMap;
@@ -110,7 +110,7 @@ pub struct ShowResponse {
     game_players: Vec<models::PublicGamePlayerUser>,
     game_html: String,
     game_logs: Vec<models::RenderedGameLog>,
-    command_spec: Option<CommandSpecs>,
+    command_spec: Option<CommandSpec>,
 }
 
 #[get("/<id>")]
