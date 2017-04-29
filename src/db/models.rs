@@ -215,7 +215,46 @@ pub struct GamePlayer {
     pub undo_game_state: Option<String>,
 }
 
-pub type PublicGamePlayer = GamePlayer;
+impl GamePlayer {
+    pub fn into_public(self) -> PublicGamePlayer {
+        PublicGamePlayer {
+            id: self.id,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            game_id: self.game_id,
+            user_id: self.user_id,
+            position: self.position,
+            color: self.color,
+            has_accepted: self.has_accepted,
+            is_turn: self.is_turn,
+            is_turn_at: self.is_turn_at,
+            last_turn_at: self.last_turn_at,
+            is_eliminated: self.is_eliminated,
+            is_winner: self.is_winner,
+            is_read: self.is_read,
+            points: self.points,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PublicGamePlayer {
+    pub id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub game_id: Uuid,
+    pub user_id: Uuid,
+    pub position: i32,
+    pub color: String,
+    pub has_accepted: bool,
+    pub is_turn: bool,
+    pub is_turn_at: NaiveDateTime,
+    pub last_turn_at: NaiveDateTime,
+    pub is_eliminated: bool,
+    pub is_winner: bool,
+    pub is_read: bool,
+    pub points: Option<f32>,
+}
 
 #[derive(Insertable)]
 #[table_name="game_players"]

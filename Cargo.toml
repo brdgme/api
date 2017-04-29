@@ -30,3 +30,4 @@ diesel = { version = "0.12.0", features = ["postgres", "uuid", "chrono", "large-
 diesel_codegen = { version = "0.12.0", features = ["postgres"] }
 r2d2-diesel = "0.12.0"
 unicase = "1.4.0"
+redis = "0.8.0"

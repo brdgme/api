@@ -35,6 +35,7 @@ impl Mail {
 pub struct Config {
     pub database_url: String,
     pub database_url_r: Option<String>,
+    pub redis_url: String,
     pub mail: Mail,
     pub mail_from: String,
 }
@@ -44,6 +45,7 @@ fn from_env() -> Result<Config> {
            database_url: env::var("DATABASE_URL")
                .chain_err(|| "DATABASE_URL must be set")?,
            database_url_r: env::var("DATABASE_URL_R").ok(),
+           redis_url: env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1/".to_string()),
            mail: Mail::from_env(),
            mail_from: env::var("MAIL_FROM").unwrap_or_else(|_| "play@brdg.me".to_string()),
        })

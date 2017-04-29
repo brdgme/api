@@ -15,6 +15,7 @@ use errors::*;
 use db::CONN;
 use game_client;
 use controller::{UuidParam, CORS};
+use websocket;
 
 #[derive(Deserialize)]
 pub struct CreateRequest {
@@ -72,6 +73,9 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
             Ok(created_game)
         })
         .chain_err(|| "error committing transaction")?;
+    websocket::game_update(&query::find_game_extended(&created_game.game.id, conn)
+                                .chain_err(|| "unable to get extended game")?
+                                .into_public())?;
     Ok(CORS(JSON(CreateResponse { id: created_game.game.id })))
 }
 
@@ -253,13 +257,10 @@ pub fn command(id: UuidParam,
 
         query::create_game_logs_from_cli(&id, logs, conn)
             .chain_err(|| "unable to create game logs")?;
-        Ok(CORS(JSON(
-            game_extended_to_show_response(
-                Some(player),
-                &query::find_game_extended(&id, conn).chain_err(|| "unable to get extended game")?,
-                conn,
-            )?
-        )))
+        let game_extended = query::find_game_extended(&id, conn)
+            .chain_err(|| "unable to get extended game")?;
+        websocket::game_update(&game_extended.clone().into_public())?;
+        Ok(CORS(JSON(game_extended_to_show_response(Some(player), &game_extended, conn)?)))
     })
 }
 

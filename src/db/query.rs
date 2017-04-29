@@ -200,6 +200,16 @@ pub fn find_game_with_version(id: &Uuid,
         .chain_err(|| "error finding game")
 }
 
+pub fn find_user_auth_tokens_for_game(user_ids: &[Uuid],
+                                      conn: &PgConnection)
+                                      -> Result<Vec<UserAuthToken>> {
+    use db::schema::user_auth_tokens;
+    user_auth_tokens::table
+        .filter(user_auth_tokens::user_id.eq_any(user_ids))
+        .get_results(conn)
+        .chain_err(|| "error finding user auth tokens")
+}
+
 #[derive(Clone)]
 pub struct GameExtended {
     pub game: Game,
@@ -218,7 +228,7 @@ impl GameExtended {
                 .into_iter()
                 .map(|(gp, u)| {
                          PublicGamePlayerUser {
-                             game_player: gp,
+                             game_player: gp.into_public(),
                              user: u.into_public(),
                          }
                      })

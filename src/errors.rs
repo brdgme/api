@@ -17,6 +17,8 @@ error_chain!{
         EnvVar(::std::env::VarError);
         Chrono(::chrono::ParseError);
         Diesel(::diesel::result::Error);
+        Redis(::redis::RedisError);
+        Json(::serde_json::Error);
     }
 
     errors {

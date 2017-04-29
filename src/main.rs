@@ -31,6 +31,7 @@ extern crate diesel;
 extern crate diesel_codegen;
 extern crate r2d2_diesel;
 extern crate unicase;
+extern crate redis;
 
 extern crate brdgme_cmd;
 extern crate brdgme_game;
@@ -43,6 +44,7 @@ mod db;
 mod mail;
 mod game_client;
 mod errors;
+mod websocket;
 
 fn main() {
     rocket::ignite()
