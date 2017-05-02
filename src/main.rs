@@ -45,6 +45,7 @@ mod mail;
 mod game_client;
 mod errors;
 mod websocket;
+mod render;
 
 fn main() {
     rocket::ignite()

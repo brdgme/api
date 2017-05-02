@@ -4,13 +4,8 @@ use hyper_native_tls::NativeTlsClient;
 use serde_json;
 
 use brdgme_cmd::cli;
-use brdgme_markup as markup;
-
-use std::str::FromStr;
 
 use errors::*;
-use db::models::{GamePlayer, User};
-use db::color;
 
 pub fn request(uri: &str, request: &cli::Request) -> Result<cli::Response> {
     let ssl = NativeTlsClient::new()
@@ -32,16 +27,4 @@ pub fn request(uri: &str, request: &cli::Request) -> Result<cli::Response> {
         cli::Response::SystemError { message } => Err(message.into()),
         default => Ok(default),
     }
-}
-
-pub fn game_players_to_markup_players(game_players: &[(GamePlayer, User)]) -> Vec<markup::Player> {
-    game_players
-        .iter()
-        .map(|&(ref gp, ref u)| {
-                 markup::Player {
-                     color: color::Color::from_str(&gp.color).unwrap().into(),
-                     name: u.name.to_owned(),
-                 }
-             })
-        .collect()
 }

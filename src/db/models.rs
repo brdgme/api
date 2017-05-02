@@ -393,11 +393,7 @@ mod tests {
     use diesel::{self, Connection};
     use diesel::prelude::*;
     use db::color::Color;
-    use db::{Connections, connect_env, schema};
-
-    lazy_static! {
-        static ref CONN: Connections = connect_env().unwrap();
-    }
+    use db::{schema, CONN};
 
     #[test]
     #[ignore]

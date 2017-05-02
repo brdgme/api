@@ -3,19 +3,42 @@ pub mod models;
 pub mod color;
 pub mod schema;
 
-use r2d2;
-use r2d2_diesel;
-use diesel;
+//use r2d2;
+//use r2d2_diesel::ConnectionManager;
+use diesel::pg::PgConnection;
 use std::env;
 use errors::*;
 
 lazy_static! {
+    pub static ref CONN: Connections = Connections {
+        w: Connection{},
+        r: Connection{},
+    };
+}
+
+pub struct Connection {}
+
+impl Connection {
+    pub fn get(&self) -> Result<Box<PgConnection>> {
+        use diesel::Connection;
+        Ok(Box::new(PgConnection::establish(&env::var("DATABASE_URL")
+                                                 .chain_err(|| "DATABASE_URL not set")?)
+                            .chain_err(|| "Unable to connect to database")?))
+    }
+}
+
+pub struct Connections {
+    pub w: Connection,
+    pub r: Connection,
+}
+
+/*lazy_static! {
     pub static ref CONN: Connections = connect_env().unwrap();
 }
 
 pub struct Connections {
-    pub w: r2d2::Pool<r2d2_diesel::ConnectionManager<diesel::pg::PgConnection>>,
-    pub r: r2d2::Pool<r2d2_diesel::ConnectionManager<diesel::pg::PgConnection>>,
+    pub w: r2d2::Pool<ConnectionManager<PgConnection>>,
+    pub r: r2d2::Pool<ConnectionManager<PgConnection>>,
 }
 
 pub fn connect(w_addr: &str, r_addr: &str) -> Result<Connections> {
@@ -33,8 +56,9 @@ pub fn connect_env() -> Result<Connections> {
 }
 
 fn conn(addr: &str)
-        -> Result<r2d2::Pool<r2d2_diesel::ConnectionManager<diesel::pg::PgConnection>>> {
+        -> Result<r2d2::Pool<ConnectionManager<PgConnection>>> {
     r2d2::Pool::new(r2d2::Config::default(),
-                    r2d2_diesel::ConnectionManager::<diesel::pg::PgConnection>::new(addr))
+                    ConnectionManager::<PgConnection>::new(addr))
             .chain_err(|| "unable to connect to database")
 }
+*/

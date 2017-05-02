@@ -1,5 +1,6 @@
 use rocket::request::FromParam;
 use rocket::response::{self, Responder};
+use rocket::http::RawStr;
 use rocket::http::hyper::header::{AccessControlAllowOrigin, AccessControlAllowMethods,
                                   AccessControlAllowHeaders, AccessControlAllowCredentials};
 use hyper::method::Method;
@@ -26,7 +27,7 @@ impl UuidParam {
 impl<'a> FromParam<'a> for UuidParam {
     type Error = Error;
 
-    fn from_param(param: &'a str) -> Result<Self> {
+    fn from_param(param: &'a RawStr) -> Result<Self> {
         Ok(UuidParam(Uuid::from_str(param)
                          .chain_err(|| "failed to parse UUID")?))
     }

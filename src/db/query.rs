@@ -745,12 +745,7 @@ mod tests {
     use super::*;
     use db::color::Color;
     use db::models::NewUserEmail;
-    use db::Connections;
-    use db::connect_env;
-
-    lazy_static! {
-        static ref CONN: Connections = connect_env().unwrap();
-    }
+    use db::CONN;
 
     #[test]
     fn rand_code_works() {
