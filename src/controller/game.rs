@@ -125,7 +125,7 @@ pub struct ShowResponse {
     pub game_version: models::PublicGameVersion,
     pub game_type: models::PublicGameType,
     pub game_players: Vec<models::PublicGamePlayerUser>,
-    pub game_html: String,
+    pub html: String,
     pub game_logs: Vec<models::RenderedGameLog>,
     pub command_spec: Option<CommandSpec>,
 }
@@ -182,7 +182,7 @@ fn game_extended_to_show_response(game_player: Option<&models::GamePlayer>,
            game_version: public.game_version,
            game_type: public.game_type,
            game_players: public.game_players,
-           game_html: markup::html(&markup::transform(&nodes, &markup_players)),
+           html: markup::html(&markup::transform(&nodes, &markup_players)),
            game_logs: game_logs
                .into_iter()
                .map(|gl| gl.into_rendered(&markup_players))

@@ -47,25 +47,14 @@ pub struct ConfirmRequest {
     code: String,
 }
 
-#[derive(Serialize)]
-pub struct ConfirmResponse {
-    token: String,
-    user_id: Uuid,
-}
-
 #[post("/confirm", data = "<data>")]
-pub fn confirm(data: JSON<ConfirmRequest>) -> Result<CORS<JSON<ConfirmResponse>>> {
+pub fn confirm(data: JSON<ConfirmRequest>) -> Result<CORS<JSON<String>>> {
     let data = data.into_inner();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
     match query::user_login_confirm(&data.email, &data.code, conn)
               .chain_err(|| "unable to confirm login")? {
-        Some(token) => {
-            Ok(CORS(JSON(ConfirmResponse {
-                             token: token.id.to_string(),
-                             user_id: token.user_id,
-                         })))
-        }
+        Some(token) => Ok(CORS(JSON(token.id.to_string()))),
         None => Err("unable to confirm login".into()),
     }
 }
@@ -92,20 +81,11 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
                                          "invalid Authorization header".into()))
             }
         };
-        let pass_uuid = match auth.password {
-            Some(p) => {
-                match Uuid::parse_str(&p) {
-                    Ok(uuid) => uuid,
-                    Err(_) => {
-                        return Outcome::Failure((Status::Unauthorized,
-                                                 "Authorization password not in valid format"
-                                                     .into()))
-                    }
-                }
-            }
-            None => {
+        let token = match Uuid::parse_str(&auth.username) {
+            Ok(uuid) => uuid,
+            Err(_) => {
                 return Outcome::Failure((Status::Unauthorized,
-                                         "Authorization password not present".into()))
+                                         "Authorization password not in valid format".into()))
             }
         };
         let conn = &*match CONN.r.get() {
@@ -116,8 +96,8 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
                          }
                      };
 
-        match query::authenticate(&auth.username, &pass_uuid, conn) {
-            Ok(Some((_, user))) => Outcome::Success(user),
+        match query::authenticate(&token, conn) {
+            Ok(Some(user)) => Outcome::Success(user),
             _ => Outcome::Failure((Status::Unauthorized, "invalid credentials".into())),
         }
     }

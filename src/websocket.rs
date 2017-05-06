@@ -64,8 +64,8 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
                                                                             game_logs,
                                                                             &markup_players),
                                          pub_state: public_render.pub_state.to_owned(),
-                                         game_html: render::markup_html(&public_render.render,
-                                                                        &markup_players)?,
+                                         html: render::markup_html(&public_render.render,
+                                                                   &markup_players)?,
                                          command_spec: None,
                                      })
                       .chain_err(|| "unable to convert game to JSON")?)
@@ -87,8 +87,8 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
                                                                          game_logs,
                                                                          &markup_players),
                                              pub_state: player_render.pub_state.to_owned(),
-                                             game_html: render::markup_html(&player_render.render,
-                                                                            &markup_players)?,
+                                             html: render::markup_html(&player_render.render,
+                                                                       &markup_players)?,
                                              command_spec: player_render.command_spec.to_owned(),
                                          })
                           .chain_err(|| "unable to convert game to JSON")?)

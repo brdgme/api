@@ -143,11 +143,8 @@ pub fn create_auth_token(for_user_id: &Uuid, conn: &PgConnection) -> Result<User
         .chain_err(|| "error creating auth token")
 }
 
-pub fn authenticate(search_email: &str,
-                    search_token: &Uuid,
-                    conn: &PgConnection)
-                    -> Result<Option<(UserEmail, User)>> {
-    use db::schema::{users, user_emails, user_auth_tokens};
+pub fn authenticate(search_token: &Uuid, conn: &PgConnection) -> Result<Option<User>> {
+    use db::schema::{users, user_auth_tokens};
 
     let uat: UserAuthToken = match user_auth_tokens::table
               .find(search_token)
@@ -159,13 +156,10 @@ pub fn authenticate(search_email: &str,
         None => return Ok(None),
     };
 
-    user_emails::table
-        .filter(user_emails::email.eq(search_email))
-        .filter(user_emails::user_id.eq(uat.user_id))
-        .inner_join(users::table)
-        .first(conn)
-        .optional()
-        .chain_err(|| "error finding user")
+    Ok(Some(users::table
+                .find(uat.user_id)
+                .first(conn)
+                .chain_err(|| "error finding user")?))
 }
 
 pub fn find_game(id: &Uuid, conn: &PgConnection) -> Result<Game> {
@@ -802,17 +796,13 @@ mod tests {
     #[ignore]
     fn login_works() {
         with_db(|conn| {
-            let confirmation = user_login_request("beefsack@gmail.com", conn).unwrap();
-            let uat = user_login_confirm("beefsack@gmail.com", &confirmation, conn)
-                .expect("error confirming auth")
-                .expect("invalid confirm code");
-            assert!(authenticate("beefsack@gmail.com", &uat.id, conn)
-                        .unwrap()
-                        .is_some());
-            assert!(authenticate("beefsacke@gmail.com", &uat.id, conn)
-                        .unwrap()
-                        .is_none());
-        });
+                    let confirmation = user_login_request("beefsack@gmail.com", conn).unwrap();
+                    let uat = user_login_confirm("beefsack@gmail.com", &confirmation, conn)
+                        .expect("error confirming auth")
+                        .expect("invalid confirm code");
+                    assert!(authenticate(&uat.id, conn).unwrap().is_some());
+                    assert!(authenticate(&uat.id, conn).unwrap().is_none());
+                });
     }
 
     #[test]
