@@ -59,21 +59,19 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
                 let status = game_status_values(&game_info.status);
                 let created_game =
                     query::create_game_with_users(&query::CreateGameOpts {
-                                                       new_game: &models::NewGame {
-                                                                      game_version_id:
-                                                                          data.game_version_id,
-                                                                      is_finished:
-                                                                          status.is_finished,
-                                                                      game_state: &game_info.state,
-                                                                  },
-                                                       whose_turn: &status.whose_turn,
-                                                       eliminated: &status.eliminated,
-                                                       winners: &status.winners,
-                                                       points: &game_info.points,
-                                                       creator_id: &user.id,
-                                                       opponent_ids: &opponent_ids,
-                                                       opponent_emails: &opponent_emails,
-                                                   },
+                                                      new_game: &models::NewGame {
+                                                          game_version_id: data.game_version_id,
+                                                          is_finished: status.is_finished,
+                                                          game_state: &game_info.state,
+                                                      },
+                                                      whose_turn: &status.whose_turn,
+                                                      eliminated: &status.eliminated,
+                                                      winners: &status.winners,
+                                                      points: &game_info.points,
+                                                      creator_id: &user.id,
+                                                      opponent_ids: &opponent_ids,
+                                                      opponent_emails: &opponent_emails,
+                                                  },
                                                   conn)
                             .chain_err(|| "unable to create game")?;
                 let created_logs =
@@ -154,9 +152,9 @@ fn game_extended_to_show_response(game_player: Option<&models::GamePlayer>,
     let (pub_state, render, command_spec) =
         match game_client::request(&game_extended.game_version.uri,
                                    &cli::Request::Render {
-                                        player: game_player.map(|gp| gp.position as usize),
-                                        game: game_extended.game.game_state.to_owned(),
-                                    })? {
+                                       player: game_player.map(|gp| gp.position as usize),
+                                       game: game_extended.game.game_state.to_owned(),
+                                   })? {
             cli::Response::Render {
                 render: cli::Render {
                     pub_state,
@@ -231,11 +229,11 @@ pub fn command(id: UuidParam,
         let (game_response, logs, can_undo, remaining_command, public_render, player_renders) =
             match game_client::request(&game_version.uri,
                                        &cli::Request::Play {
-                                            player: position as usize,
-                                            game: game.game_state.clone(),
-                                            command: data.command.to_owned(),
-                                            names: names,
-                                        })? {
+                                           player: position as usize,
+                                           game: game.game_state.clone(),
+                                           command: data.command.to_owned(),
+                                           names: names,
+                                       })? {
                 cli::Response::Play {
                     game,
                     logs,
@@ -251,10 +249,10 @@ pub fn command(id: UuidParam,
 
         let updated = query::update_game_command_success(&id,
                                                          &models::NewGame {
-                                                              game_version_id: game.game_version_id,
-                                                              is_finished: status.is_finished,
-                                                              game_state: &game_response.state,
-                                                          },
+                                                             game_version_id: game.game_version_id,
+                                                             is_finished: status.is_finished,
+                                                             game_state: &game_response.state,
+                                                         },
                                                          if can_undo {
                                                              Some((&player.id, &game.game_state))
                                                          } else {
@@ -301,10 +299,10 @@ pub fn undo(id: UuidParam, user: models::User) -> Result<CORS<JSON<query::Public
         let status = game_status_values(&game_response.status);
         let updated = query::update_game_command_success(&id,
                                                          &models::NewGame {
-                                                              game_version_id: game.game_version_id,
-                                                              is_finished: status.is_finished,
-                                                              game_state: &game_response.state,
-                                                          },
+                                                             game_version_id: game.game_version_id,
+                                                             is_finished: status.is_finished,
+                                                             game_state: &game_response.state,
+                                                         },
                                                          None,
                                                          &status.whose_turn,
                                                          &status.eliminated,

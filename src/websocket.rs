@@ -25,16 +25,13 @@ fn created_logs_for_player(player_id: Option<Uuid>,
                            players: &[markup::Player])
                            -> Vec<RenderedGameLog> {
     logs.iter()
-        .filter_map(|gl| if gl.game_log.is_public ||
-                            player_id
-                                .map(|p_id| {
-                                         gl.targets.iter().find(|t| t.game_player_id == p_id)
-                                     })
-                                .is_some() {
-                        Some(gl.game_log.to_owned().into_rendered(players).unwrap())
-                    } else {
-                        None
-                    })
+        .filter(|gl| {
+                    gl.game_log.is_public ||
+                    player_id
+                        .map(|p_id| gl.targets.iter().find(|t| t.game_player_id == p_id))
+                        .is_some()
+                })
+        .map(|gl| gl.game_log.to_owned().into_rendered(players).unwrap())
         .collect()
 }
 
@@ -56,19 +53,19 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
     pipe.cmd("PUBLISH")
         .arg(format!("game.{}", game.game.id))
         .arg(&serde_json::to_string(&ShowResponse {
-                                         game: game.game.to_owned(),
-                                         game_type: game.game_type.to_owned(),
-                                         game_version: game.game_version.to_owned(),
-                                         game_players: game.game_players.to_owned(),
-                                         game_logs: created_logs_for_player(None,
-                                                                            game_logs,
-                                                                            &markup_players),
-                                         pub_state: public_render.pub_state.to_owned(),
-                                         html: render::markup_html(&public_render.render,
-                                                                   &markup_players)?,
-                                         command_spec: None,
-                                     })
-                      .chain_err(|| "unable to convert game to JSON")?)
+                                       game: game.game.to_owned(),
+                                       game_type: game.game_type.to_owned(),
+                                       game_version: game.game_version.to_owned(),
+                                       game_players: game.game_players.to_owned(),
+                                       game_logs: created_logs_for_player(None,
+                                                                          game_logs,
+                                                                          &markup_players),
+                                       pub_state: public_render.pub_state.to_owned(),
+                                       html: render::markup_html(&public_render.render,
+                                                                 &markup_players)?,
+                                       command_spec: None,
+                                   })
+                     .chain_err(|| "unable to convert game to JSON")?)
         .ignore();
     for gp in &game.game_players {
         let player_render = match player_renders.get(gp.game_player.position as usize) {
@@ -78,20 +75,20 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
         pipe.cmd("PUBLISH")
             .arg(format!("user.{}", gp.user.id))
             .arg(&serde_json::to_string(&ShowResponse {
-                                             game: game.game.to_owned(),
-                                             game_type: game.game_type.to_owned(),
-                                             game_version: game.game_version.to_owned(),
-                                             game_players: game.game_players.to_owned(),
-                                             game_logs:
-                                                 created_logs_for_player(Some(gp.game_player.id),
-                                                                         game_logs,
-                                                                         &markup_players),
-                                             pub_state: player_render.pub_state.to_owned(),
-                                             html: render::markup_html(&player_render.render,
-                                                                       &markup_players)?,
-                                             command_spec: player_render.command_spec.to_owned(),
-                                         })
-                          .chain_err(|| "unable to convert game to JSON")?)
+                                           game: game.game.to_owned(),
+                                           game_type: game.game_type.to_owned(),
+                                           game_version: game.game_version.to_owned(),
+                                           game_players: game.game_players.to_owned(),
+                                           game_logs:
+                                               created_logs_for_player(Some(gp.game_player.id),
+                                                                       game_logs,
+                                                                       &markup_players),
+                                           pub_state: player_render.pub_state.to_owned(),
+                                           html: render::markup_html(&player_render.render,
+                                                                     &markup_players)?,
+                                           command_spec: player_render.command_spec.to_owned(),
+                                       })
+                         .chain_err(|| "unable to convert game to JSON")?)
             .ignore();
     }
     pipe.query(&conn)

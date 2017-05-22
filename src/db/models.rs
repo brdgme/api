@@ -401,11 +401,11 @@ mod tests {
         let conn = &*CONN.w.get().unwrap();
         conn.begin_test_transaction().unwrap();
         diesel::insert(&NewUser {
-                            name: "blah",
-                            pref_colors: &[&Color::Green.to_string()],
-                            login_confirmation: None,
-                            login_confirmation_at: None,
-                        })
+                           name: "blah",
+                           pref_colors: &[&Color::Green.to_string()],
+                           login_confirmation: None,
+                           login_confirmation_at: None,
+                       })
                 .into(schema::users::table)
                 .get_result::<User>(conn)
                 .expect("Error inserting user");

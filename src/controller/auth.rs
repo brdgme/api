@@ -33,7 +33,7 @@ pub fn create(data: JSON<CreateForm>) -> Result<CORS<()>> {
                    .html(&mail::html_layout(&format!("Your brdg.me confirmation is <b>{}</b>
 
 This confirmation will expire in 30 minutes if not used.",
-                                                     confirmation)))
+                                                   confirmation)))
                    .build()
                    .chain_err(|| "unable to create login confirmation email")?)
             .chain_err(|| "unable to send login confirmation email")?;
@@ -89,12 +89,12 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
             }
         };
         let conn = &*match CONN.r.get() {
-                         Ok(c) => c,
-                         Err(_) => {
-                             return Outcome::Failure((Status::InternalServerError,
-                                                      "error getting connection".into()))
-                         }
-                     };
+             Ok(c) => c,
+             Err(_) => {
+                 return Outcome::Failure((Status::InternalServerError,
+                                          "error getting connection".into()))
+             }
+         };
 
         match query::authenticate(&token, conn) {
             Ok(Some(user)) => Outcome::Success(user),

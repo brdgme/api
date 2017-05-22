@@ -1,3 +1,4 @@
+use rocket::request::Request;
 use rocket::response::{self, Responder, Response};
 use rocket::http::{Status, ContentType};
 use rocket::http::hyper::header::{AccessControlAllowOrigin, AccessControlAllowMethods,
@@ -30,7 +31,7 @@ error_chain!{
 }
 
 impl<'r> Responder<'r> for Error {
-    fn respond(self) -> response::Result<'r> {
+    fn respond_to(self, _: &Request) -> response::Result<'r> {
         match self {
             Error(ErrorKind::UserError(ref message), _) => {
                 Ok(Response::build()

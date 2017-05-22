@@ -18,12 +18,9 @@ pub enum Mail {
 impl Mail {
     fn smtp_from_env() -> Result<Self> {
         Ok(Mail::Smtp {
-               addr: env::var("SMTP_ADDR")
-                   .chain_err(|| "SMTP_ADDR must be set")?,
-               user: env::var("SMTP_USER")
-                   .chain_err(|| "SMTP_USER must be set")?,
-               pass: env::var("SMTP_PASS")
-                   .chain_err(|| "SMTP_PASS must be set")?,
+               addr: env::var("SMTP_ADDR").chain_err(|| "SMTP_ADDR must be set")?,
+               user: env::var("SMTP_USER").chain_err(|| "SMTP_USER must be set")?,
+               pass: env::var("SMTP_PASS").chain_err(|| "SMTP_PASS must be set")?,
            })
     }
 

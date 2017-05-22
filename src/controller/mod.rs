@@ -1,4 +1,4 @@
-use rocket::request::FromParam;
+use rocket::request::{FromParam, Request};
 use rocket::response::{self, Responder};
 use rocket::http::RawStr;
 use rocket::http::hyper::header::{AccessControlAllowOrigin, AccessControlAllowMethods,
@@ -28,16 +28,15 @@ impl<'a> FromParam<'a> for UuidParam {
     type Error = Error;
 
     fn from_param(param: &'a RawStr) -> Result<Self> {
-        Ok(UuidParam(Uuid::from_str(param)
-                         .chain_err(|| "failed to parse UUID")?))
+        Ok(UuidParam(Uuid::from_str(param).chain_err(|| "failed to parse UUID")?))
     }
 }
 
 pub struct CORS<R>(R);
 
 impl<'r, R: Responder<'r>> Responder<'r> for CORS<R> {
-    fn respond(self) -> response::Result<'r> {
-        let mut response = self.0.respond()?;
+    fn respond_to(self, request: &Request) -> response::Result<'r> {
+        let mut response = self.0.respond_to(request)?;
         response.set_header(AccessControlAllowOrigin::Any);
         response.set_header(AccessControlAllowMethods(vec![Method::Get,
                                                            Method::Post,

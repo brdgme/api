@@ -23,11 +23,11 @@ lazy_static! {
 pub fn create_user_by_name(name: &str, conn: &PgConnection) -> Result<User> {
     use db::schema::users;
     diesel::insert(&NewUser {
-                        name: name,
-                        pref_colors: &[],
-                        login_confirmation: None,
-                        login_confirmation_at: None,
-                    })
+                       name: name,
+                       pref_colors: &[],
+                       login_confirmation: None,
+                       login_confirmation_at: None,
+                   })
             .into(users::table)
             .get_result(conn)
             .chain_err(|| "error creating user")
@@ -68,10 +68,10 @@ pub fn create_user_by_email(email: &str, conn: &PgConnection) -> Result<(UserEma
     conn.transaction(|| {
         let u = create_user_by_name(email, conn)?;
         let ue = create_user_email(&NewUserEmail {
-                                        user_id: u.id,
-                                        email: email,
-                                        is_primary: true,
-                                    },
+                                       user_id: u.id,
+                                       email: email,
+                                       is_primary: true,
+                                   },
                                    conn)?;
         Ok((ue, u))
     })
@@ -148,8 +148,8 @@ pub fn authenticate(search_token: &Uuid, conn: &PgConnection) -> Result<Option<U
 
     let uat: UserAuthToken = match user_auth_tokens::table
               .find(search_token)
-              .filter(user_auth_tokens::created_at.gt(UTC::now().naive_utc() -
-                                                      *TOKEN_EXPIRY))
+              .filter(user_auth_tokens::created_at
+                          .gt(UTC::now().naive_utc() - *TOKEN_EXPIRY))
               .first(conn)
               .optional()? {
         Some(v) => v,
@@ -337,20 +337,20 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
         let mut players: Vec<GamePlayer> = vec![];
         for (pos, user) in users.iter().enumerate() {
             players.push(create_game_player(&NewGamePlayer {
-                                                 game_id: game.id,
-                                                 user_id: user.id,
-                                                 position: pos as i32,
-                                                 color: &player_colors[pos].to_string(),
-                                                 has_accepted: user.id == *opts.creator_id,
-                                                 is_turn: opts.whose_turn.contains(&pos),
-                                                 is_turn_at: now,
-                                                 last_turn_at: now,
-                                                 is_eliminated: opts.eliminated.contains(&pos),
-                                                 is_winner: opts.winners.contains(&pos),
-                                                 is_read: false,
-                                                 points: opts.points.get(pos).cloned(),
-                                                 undo_game_state: None,
-                                             },
+                                                game_id: game.id,
+                                                user_id: user.id,
+                                                position: pos as i32,
+                                                color: &player_colors[pos].to_string(),
+                                                has_accepted: user.id == *opts.creator_id,
+                                                is_turn: opts.whose_turn.contains(&pos),
+                                                is_turn_at: now,
+                                                last_turn_at: now,
+                                                is_eliminated: opts.eliminated.contains(&pos),
+                                                is_winner: opts.winners.contains(&pos),
+                                                is_read: false,
+                                                points: opts.points.get(pos).cloned(),
+                                                undo_game_state: None,
+                                            },
                                             conn)
                                  .chain_err(|| "could not create game player")?);
         }
@@ -502,11 +502,11 @@ pub fn create_game_logs_from_cli(game_id: &Uuid,
                                    .to_owned());
             }
             created.push(create_game_log(&NewGameLog {
-                                              game_id: *game_id,
-                                              body: &l.content,
-                                              is_public: l.public,
-                                              logged_at: l.at,
-                                          },
+                                             game_id: *game_id,
+                                             body: &l.content,
+                                             is_public: l.public,
+                                             logged_at: l.at,
+                                         },
                                          &player_to,
                                          conn)?);
         }
@@ -547,9 +547,7 @@ pub fn create_game_log(log: &NewGameLog,
                        -> Result<CreatedGameLog> {
     use db::schema::game_logs;
     conn.transaction(|| {
-        let created_log: GameLog = diesel::insert(log)
-            .into(game_logs::table)
-            .get_result(conn)?;
+        let created_log: GameLog = diesel::insert(log).into(game_logs::table).get_result(conn)?;
         let clid = created_log.id;
         Ok(CreatedGameLog {
                game_log: created_log,
@@ -566,9 +564,9 @@ pub fn create_game_log_targets(log_id: &Uuid,
         let mut created = vec![];
         for id in player_ids {
             created.push(create_game_log_target(&NewGameLogTarget {
-                                                     game_log_id: *log_id,
-                                                     game_player_id: *id,
-                                                 },
+                                                    game_log_id: *log_id,
+                                                    game_player_id: *id,
+                                                },
                                                 conn)?);
         }
         Ok(created)
@@ -717,9 +715,7 @@ pub fn find_game_logs_for_player(game_player_id: &Uuid,
                                  -> Result<Vec<GameLog>> {
     use db::schema::{game_logs, game_log_targets, game_players};
 
-    let game_player: GamePlayer = game_players::table
-        .find(game_player_id)
-        .get_result(conn)?;
+    let game_player: GamePlayer = game_players::table.find(game_player_id).get_result(conn)?;
     Ok(game_logs::table
            .left_outer_join(game_log_targets::table)
            .filter(game_logs::game_id.eq(game_player.game_id))
@@ -783,10 +779,10 @@ mod tests {
             assert_eq!(find_user(&Uuid::new_v4(), conn).unwrap(), None);
             let u = create_user_by_name("beefsack", conn).unwrap();
             assert!(create_user_email(&NewUserEmail {
-                                           user_id: u.id,
-                                           email: "beefsack@gmail.com",
-                                           is_primary: true,
-                                       },
+                                          user_id: u.id,
+                                          email: "beefsack@gmail.com",
+                                          is_primary: true,
+                                      },
                                       conn)
                             .is_ok());
         });
@@ -824,10 +820,10 @@ mod tests {
         with_db(|conn| {
             let (user_email, user) = create_user_by_email("beefsack@gmail.com", conn).unwrap();
             create_user_email(&NewUserEmail {
-                                   user_id: user.id,
-                                   email: "beefsack+two@gmail.com",
-                                   is_primary: false,
-                               },
+                                  user_id: user.id,
+                                  email: "beefsack+two@gmail.com",
+                                  is_primary: false,
+                              },
                               conn)
                     .expect("error creating user email");
             let (_, found_user) = find_user_with_primary_email_by_email("beefsack+two@gmail.com",
@@ -845,19 +841,19 @@ mod tests {
         with_db(|conn| {
             let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
             let game_version = create_game_version(&NewGameVersion {
-                                                        game_type_id: game_type.id,
-                                                        uri: "https://example.com/lost-cities-1",
-                                                        name: "v1",
-                                                        is_public: true,
-                                                        is_deprecated: false,
-                                                    },
+                                                       game_type_id: game_type.id,
+                                                       uri: "https://example.com/lost-cities-1",
+                                                       name: "v1",
+                                                       is_public: true,
+                                                       is_deprecated: false,
+                                                   },
                                                    conn)
                     .unwrap();
             assert!(create_game(&NewGame {
-                                     game_version_id: game_version.id,
-                                     is_finished: false,
-                                     game_state: "blah",
-                                 },
+                                    game_version_id: game_version.id,
+                                    is_finished: false,
+                                    game_state: "blah",
+                                },
                                 conn)
                             .is_ok());
         });
@@ -871,51 +867,51 @@ mod tests {
             let (_, p2) = create_user_by_email("beefsack+two@gmail.com", conn).unwrap();
             let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
             let game_version = create_game_version(&NewGameVersion {
-                                                        game_type_id: game_type.id,
-                                                        uri: "https://example.com/lost-cities-1",
-                                                        name: "v1",
-                                                        is_public: true,
-                                                        is_deprecated: false,
-                                                    },
+                                                       game_type_id: game_type.id,
+                                                       uri: "https://example.com/lost-cities-1",
+                                                       name: "v1",
+                                                       is_public: true,
+                                                       is_deprecated: false,
+                                                   },
                                                    conn)
                     .unwrap();
             let game = create_game(&NewGame {
-                                        game_version_id: game_version.id,
-                                        is_finished: false,
-                                        game_state: "egg",
-                                    },
+                                       game_version_id: game_version.id,
+                                       is_finished: false,
+                                       game_state: "egg",
+                                   },
                                    conn)
                     .unwrap();
             create_game_players(&[NewGamePlayer {
-                                      game_id: game.id,
-                                      user_id: p1.id,
-                                      position: 0,
-                                      color: &Color::Green.to_string(),
-                                      has_accepted: true,
-                                      is_turn: false,
-                                      is_turn_at: UTC::now().naive_utc(),
-                                      last_turn_at: UTC::now().naive_utc(),
-                                      is_eliminated: false,
-                                      is_winner: false,
-                                      is_read: false,
-                                      points: None,
-                                      undo_game_state: None,
-                                  },
-                                  NewGamePlayer {
-                                      game_id: game.id,
-                                      user_id: p2.id,
-                                      position: 1,
-                                      color: &Color::Red.to_string(),
-                                      has_accepted: false,
-                                      is_turn: true,
-                                      is_turn_at: UTC::now().naive_utc(),
-                                      last_turn_at: UTC::now().naive_utc(),
-                                      is_eliminated: false,
-                                      is_winner: false,
-                                      is_read: false,
-                                      points: Some(1.5),
-                                      undo_game_state: None,
-                                  }],
+                                     game_id: game.id,
+                                     user_id: p1.id,
+                                     position: 0,
+                                     color: &Color::Green.to_string(),
+                                     has_accepted: true,
+                                     is_turn: false,
+                                     is_turn_at: UTC::now().naive_utc(),
+                                     last_turn_at: UTC::now().naive_utc(),
+                                     is_eliminated: false,
+                                     is_winner: false,
+                                     is_read: false,
+                                     points: None,
+                                     undo_game_state: None,
+                                 },
+                                 NewGamePlayer {
+                                     game_id: game.id,
+                                     user_id: p2.id,
+                                     position: 1,
+                                     color: &Color::Red.to_string(),
+                                     has_accepted: false,
+                                     is_turn: true,
+                                     is_turn_at: UTC::now().naive_utc(),
+                                     last_turn_at: UTC::now().naive_utc(),
+                                     is_eliminated: false,
+                                     is_winner: false,
+                                     is_read: false,
+                                     points: Some(1.5),
+                                     undo_game_state: None,
+                                 }],
                                 conn)
                     .unwrap();
         });
@@ -929,19 +925,19 @@ mod tests {
             let (_, p2) = create_user_by_email("beefsack+two@gmail.com", conn).unwrap();
             let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
             let game_version = create_game_version(&NewGameVersion {
-                                                        game_type_id: game_type.id,
-                                                        uri: "https://example.com/lost-cities-1",
-                                                        name: "v1",
-                                                        is_public: true,
-                                                        is_deprecated: false,
-                                                    },
+                                                       game_type_id: game_type.id,
+                                                       uri: "https://example.com/lost-cities-1",
+                                                       name: "v1",
+                                                       is_public: true,
+                                                       is_deprecated: false,
+                                                   },
                                                    conn)
                     .unwrap();
             let game = create_game(&NewGame {
-                                        game_version_id: game_version.id,
-                                        is_finished: false,
-                                        game_state: "egg",
-                                    },
+                                       game_version_id: game_version.id,
+                                       is_finished: false,
+                                       game_state: "egg",
+                                   },
                                    conn)
                     .unwrap();
             player_can_undo_set_undo_game_state(&game.id, &p1.id, "{}", conn)
@@ -957,19 +953,19 @@ mod tests {
             let (_, p2) = create_user_by_email("beefsack+two@gmail.com", conn).unwrap();
             let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
             let game_version = create_game_version(&NewGameVersion {
-                                                        game_type_id: game_type.id,
-                                                        uri: "https://example.com/lost-cities-1",
-                                                        name: "v1",
-                                                        is_public: true,
-                                                        is_deprecated: false,
-                                                    },
+                                                       game_type_id: game_type.id,
+                                                       uri: "https://example.com/lost-cities-1",
+                                                       name: "v1",
+                                                       is_public: true,
+                                                       is_deprecated: false,
+                                                   },
                                                    conn)
                     .unwrap();
             let game = create_game(&NewGame {
-                                        game_version_id: game_version.id,
-                                        is_finished: false,
-                                        game_state: "egg",
-                                    },
+                                       game_version_id: game_version.id,
+                                       is_finished: false,
+                                       game_state: "egg",
+                                   },
                                    conn)
                     .unwrap();
             player_cannot_undo_set_undo_game_state(&game.id, conn)
