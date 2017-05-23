@@ -28,7 +28,7 @@ fn created_logs_for_player(player_id: Option<Uuid>,
         .filter(|gl| {
                     gl.game_log.is_public ||
                     player_id
-                        .map(|p_id| gl.targets.iter().find(|t| t.game_player_id == p_id))
+                        .and_then(|p_id| gl.targets.iter().find(|t| t.game_player_id == p_id))
                         .is_some()
                 })
         .map(|gl| gl.game_log.to_owned().into_rendered(players).unwrap())

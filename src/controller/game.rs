@@ -283,7 +283,13 @@ pub fn command(id: UuidParam,
                                &public_render,
                                &player_renders,
                                &query::find_valid_user_auth_tokens_for_users(&user_ids, conn)?)?;
-        Ok(CORS(JSON(game_extended_to_show_response(Some(player), &game_extended, conn)?)))
+        Ok(CORS(JSON(game_extended_to_show_response(game_extended
+                                                        .game_players
+                                                        .iter()
+                                                        .find(|gp| gp.0.id == player.id)
+                                                        .map(|gp| &gp.0),
+                                                    &game_extended,
+                                                    conn)?)))
     })
 }
 
