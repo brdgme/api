@@ -43,7 +43,8 @@ pub struct GameUpdateOpts<'a> {
 pub fn game_update<'a>(game: &'a PublicGameExtended,
                        game_logs: &[CreatedGameLog],
                        public_render: &cli::Render,
-                       player_renders: &[cli::Render])
+                       player_renders: &[cli::Render],
+                       user_auth_tokens: &[UserAuthToken])
                        -> Result<()> {
     let conn = CLIENT
         .get_connection()
@@ -53,6 +54,7 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
     pipe.cmd("PUBLISH")
         .arg(format!("game.{}", game.game.id))
         .arg(&serde_json::to_string(&ShowResponse {
+                                       game_player: None,
                                        game: game.game.to_owned(),
                                        game_type: game.game_type.to_owned(),
                                        game_version: game.game_version.to_owned(),
@@ -72,24 +74,26 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
             Some(pr) => pr,
             None => continue,
         };
-        pipe.cmd("PUBLISH")
-            .arg(format!("user.{}", gp.user.id))
-            .arg(&serde_json::to_string(&ShowResponse {
-                                           game: game.game.to_owned(),
-                                           game_type: game.game_type.to_owned(),
-                                           game_version: game.game_version.to_owned(),
-                                           game_players: game.game_players.to_owned(),
-                                           game_logs:
-                                               created_logs_for_player(Some(gp.game_player.id),
-                                                                       game_logs,
-                                                                       &markup_players),
-                                           pub_state: player_render.pub_state.to_owned(),
-                                           html: render::markup_html(&player_render.render,
-                                                                     &markup_players)?,
-                                           command_spec: player_render.command_spec.to_owned(),
-                                       })
-                         .chain_err(|| "unable to convert game to JSON")?)
-            .ignore();
+        let player_message = ShowResponse {
+            game_player: Some(gp.game_player.to_owned()),
+            game: game.game.to_owned(),
+            game_type: game.game_type.to_owned(),
+            game_version: game.game_version.to_owned(),
+            game_players: game.game_players.to_owned(),
+            game_logs: created_logs_for_player(Some(gp.game_player.id), game_logs, &markup_players),
+            pub_state: player_render.pub_state.to_owned(),
+            html: render::markup_html(&player_render.render, &markup_players)?,
+            command_spec: player_render.command_spec.to_owned(),
+        };
+        for uat in user_auth_tokens {
+            if uat.user_id == gp.user.id {
+                pipe.cmd("PUBLISH")
+                    .arg(format!("user.{}", uat.id))
+                    .arg(&serde_json::to_string(&player_message)
+                              .chain_err(|| "unable to convert game to JSON")?)
+                    .ignore();
+            }
+        }
     }
     pipe.query(&conn)
         .chain_err(|| "error publishing game updates")

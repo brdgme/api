@@ -35,7 +35,7 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
     let data = data.into_inner();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
-    let (created_game, created_logs, public_render, player_renders) =
+    let (created_game, created_logs, public_render, player_renders, user_ids) =
         conn.transaction::<_, Error, _>(move || {
                 let opponent_ids = data.opponent_ids.unwrap_or_else(|| vec![]);
                 let opponent_emails = data.opponent_emails.unwrap_or_else(|| vec![]);
@@ -77,7 +77,9 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
                 let created_logs =
                     query::create_game_logs_from_cli(&created_game.game.id, logs, conn)
                         .chain_err(|| "unable to create game logs")?;
-                Ok((created_game, created_logs, public_render, player_renders))
+                let mut user_ids = opponent_ids.clone();
+                user_ids.push(user.id);
+                Ok((created_game, created_logs, public_render, player_renders, user_ids))
             })
             .chain_err(|| "error committing transaction")?;
     websocket::game_update(&query::find_game_extended(&created_game.game.id, conn)
@@ -85,7 +87,8 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
                                 .into_public(),
                            &created_logs,
                            &public_render,
-                           &player_renders)?;
+                           &player_renders,
+                           &query::find_valid_user_auth_tokens_for_users(&user_ids, conn)?)?;
     Ok(CORS(JSON(CreateResponse { id: created_game.game.id })))
 }
 
@@ -122,6 +125,7 @@ pub struct ShowResponse {
     pub pub_state: String,
     pub game_version: models::PublicGameVersion,
     pub game_type: models::PublicGameType,
+    pub game_player: Option<models::PublicGamePlayer>,
     pub game_players: Vec<models::PublicGamePlayerUser>,
     pub html: String,
     pub game_logs: Vec<models::RenderedGameLog>,
@@ -175,6 +179,7 @@ fn game_extended_to_show_response(game_player: Option<&models::GamePlayer>,
     }?;
 
     Ok(ShowResponse {
+           game_player: game_player.map(|gp| gp.to_owned().into_public()),
            game: public.game,
            pub_state: pub_state,
            game_version: public.game_version,
@@ -268,10 +273,16 @@ pub fn command(id: UuidParam,
             .chain_err(|| "unable to create game logs")?;
         let game_extended = query::find_game_extended(&id, conn)
             .chain_err(|| "unable to get extended game")?;
+        let user_ids: Vec<Uuid> = game_extended
+            .game_players
+            .iter()
+            .map(|gp| gp.1.id.clone())
+            .collect();
         websocket::game_update(&game_extended.clone().into_public(),
                                &created_logs,
                                &public_render,
-                               &player_renders)?;
+                               &player_renders,
+                               &query::find_valid_user_auth_tokens_for_users(&user_ids, conn)?)?;
         Ok(CORS(JSON(game_extended_to_show_response(Some(player), &game_extended, conn)?)))
     })
 }
@@ -343,8 +354,17 @@ pub fn version_public() -> Result<CORS<JSON<VersionPublicResponse>>> {
 }
 
 #[derive(Serialize)]
+pub struct MyActiveGame {
+    pub game: models::PublicGame,
+    pub game_type: models::PublicGameType,
+    pub game_version: models::PublicGameVersion,
+    pub game_player: Option<models::PublicGamePlayer>,
+    pub game_players: Vec<models::PublicGamePlayerUser>,
+}
+
+#[derive(Serialize)]
 pub struct MyActiveResponse {
-    games: Vec<query::PublicGameExtended>,
+    games: Vec<MyActiveGame>,
 }
 
 #[get("/my_active")]
@@ -355,7 +375,19 @@ pub fn my_active(user: models::User) -> Result<CORS<JSON<MyActiveResponse>>> {
                      games: query::find_active_games_for_user(&user.id, conn)
                          .chain_err(|| "error getting active_games")?
                          .into_iter()
-                         .map(|game_extended| game_extended.into_public())
+                         .map(|game_extended| {
+        let pg = game_extended.into_public();
+        MyActiveGame {
+            game: pg.game,
+            game_type: pg.game_type,
+            game_version: pg.game_version,
+            game_player: pg.game_players
+                .iter()
+                .find(|gp| gp.user.id == user.id)
+                .map(|gp| gp.game_player.to_owned()),
+            game_players: pg.game_players,
+        }
+    })
                          .collect(),
                  })))
 }

@@ -162,6 +162,18 @@ pub fn authenticate(search_token: &Uuid, conn: &PgConnection) -> Result<Option<U
                 .chain_err(|| "error finding user")?))
 }
 
+pub fn find_valid_user_auth_tokens_for_users(user_ids: &[Uuid],
+                                             conn: &PgConnection)
+                                             -> Result<Vec<UserAuthToken>> {
+    use db::schema::user_auth_tokens;
+
+    user_auth_tokens::table
+        .filter(user_auth_tokens::user_id.eq_any(user_ids))
+        .filter(user_auth_tokens::created_at.gt(UTC::now().naive_utc() - *TOKEN_EXPIRY))
+        .get_results(conn)
+        .chain_err(|| "error finding user auth tokens for user")
+}
+
 pub fn find_game(id: &Uuid, conn: &PgConnection) -> Result<Game> {
     use db::schema::games;
 
@@ -192,16 +204,6 @@ pub fn find_game_with_version(id: &Uuid,
         .first(conn)
         .optional()
         .chain_err(|| "error finding game")
-}
-
-pub fn find_user_auth_tokens_for_game(user_ids: &[Uuid],
-                                      conn: &PgConnection)
-                                      -> Result<Vec<UserAuthToken>> {
-    use db::schema::user_auth_tokens;
-    user_auth_tokens::table
-        .filter(user_auth_tokens::user_id.eq_any(user_ids))
-        .get_results(conn)
-        .chain_err(|| "error finding user auth tokens")
 }
 
 #[derive(Clone)]
