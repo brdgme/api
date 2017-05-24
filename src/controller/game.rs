@@ -9,6 +9,7 @@ use brdgme_game::command::Spec as CommandSpec;
 use brdgme_markup as markup;
 
 use std::collections::HashMap;
+use std::borrow::Cow;
 
 use db::{query, models};
 use errors::*;
@@ -145,31 +146,30 @@ pub fn show(id: UuidParam, user: Option<models::User>) -> Result<CORS<JSON<ShowR
             .find(|&&(ref gp, _)| u.id == gp.user_id)
             .map(|&(ref gp, _)| gp)
     });
-    Ok(CORS(JSON(game_extended_to_show_response(game_player, &game_extended, conn)?)))
+    Ok(CORS(JSON(game_extended_to_show_response(game_player, &game_extended, None, conn)?)))
 }
 
 fn game_extended_to_show_response(game_player: Option<&models::GamePlayer>,
                                   game_extended: &query::GameExtended,
+                                  render: Option<&cli::Render>,
                                   conn: &PgConnection)
                                   -> Result<ShowResponse> {
     let public = game_extended.clone().into_public();
-    let (pub_state, render, command_spec) =
-        match game_client::request(&game_extended.game_version.uri,
-                                   &cli::Request::Render {
-                                       player: game_player.map(|gp| gp.position as usize),
-                                       game: game_extended.game.game_state.to_owned(),
-                                   })? {
-            cli::Response::Render {
-                render: cli::Render {
-                    pub_state,
-                    render,
-                    command_spec,
-                },
-            } => (pub_state, render, command_spec),
-            _ => bail!("invalid render response"),
-        };
+    let render: Cow<cli::Render> = match render {
+        Some(r) => Cow::Borrowed(r),
+        None => {
+            match game_client::request(&game_extended.game_version.uri,
+                                       &cli::Request::Render {
+                                           player: game_player.map(|gp| gp.position as usize),
+                                           game: game_extended.game.game_state.to_owned(),
+                                       })? {
+                cli::Response::Render { render } => Cow::Owned(render),
+                _ => bail!("invalid render response"),
+            }
+        }
+    };
 
-    let (nodes, _) = markup::from_string(&render)
+    let (nodes, _) = markup::from_string(&render.render)
         .chain_err(|| "error parsing render markup")?;
 
     let markup_players = render::game_players_to_markup_players(&game_extended.game_players);
@@ -181,7 +181,7 @@ fn game_extended_to_show_response(game_player: Option<&models::GamePlayer>,
     Ok(ShowResponse {
            game_player: game_player.map(|gp| gp.to_owned().into_public()),
            game: public.game,
-           pub_state: pub_state,
+           pub_state: render.pub_state.to_owned(),
            game_version: public.game_version,
            game_type: public.game_type,
            game_players: public.game_players,
@@ -190,7 +190,7 @@ fn game_extended_to_show_response(game_player: Option<&models::GamePlayer>,
                .into_iter()
                .map(|gl| gl.into_rendered(&markup_players))
                .collect::<Result<Vec<models::RenderedGameLog>>>()?,
-           command_spec: command_spec,
+           command_spec: render.command_spec.to_owned(),
        })
 }
 
@@ -283,12 +283,18 @@ pub fn command(id: UuidParam,
                                &public_render,
                                &player_renders,
                                &query::find_valid_user_auth_tokens_for_users(&user_ids, conn)?)?;
-        Ok(CORS(JSON(game_extended_to_show_response(game_extended
-                                                        .game_players
-                                                        .iter()
-                                                        .find(|gp| gp.0.id == player.id)
-                                                        .map(|gp| &gp.0),
+        let gp = game_extended
+            .game_players
+            .iter()
+            .find(|gp| gp.0.id == player.id)
+            .map(|gp| &gp.0);
+        Ok(CORS(JSON(game_extended_to_show_response(gp,
                                                     &game_extended,
+                                                    gp.and_then(|gp| {
+                                                                    player_renders
+                                                                        .get(gp.position as
+                                                                             usize)
+                                                                }),
                                                     conn)?)))
     })
 }
