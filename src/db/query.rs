@@ -233,7 +233,7 @@ impl GameExtended {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct PublicGameExtended {
     pub game: PublicGame,
     pub game_type: PublicGameType,
@@ -539,6 +539,7 @@ pub fn find_game_players_with_user_by_game(game_id: &Uuid,
         .chain_err(|| "error finding game players")
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct CreatedGameLog {
     pub game_log: GameLog,
     pub targets: Vec<GameLogTarget>,

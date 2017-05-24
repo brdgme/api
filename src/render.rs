@@ -7,28 +7,27 @@ use db::models::{GamePlayer, User, PublicGamePlayerUser};
 use db::color;
 
 pub fn public_game_players_to_markup_players(game_players: &[PublicGamePlayerUser])
-                                             -> Vec<markup::Player> {
+                                             -> Result<Vec<markup::Player>> {
     game_players
         .iter()
         .map(|gpu| {
-                 markup::Player {
-                     color: color::Color::from_str(&gpu.game_player.color)
-                         .unwrap()
-                         .into(),
-                     name: gpu.user.name.to_owned(),
-                 }
+                 Ok(markup::Player {
+                        color: color::Color::from_str(&gpu.game_player.color)?.into(),
+                        name: gpu.user.name.to_owned(),
+                    })
              })
         .collect()
 }
 
-pub fn game_players_to_markup_players(game_players: &[(GamePlayer, User)]) -> Vec<markup::Player> {
+pub fn game_players_to_markup_players(game_players: &[(GamePlayer, User)])
+                                      -> Result<Vec<markup::Player>> {
     game_players
         .iter()
         .map(|&(ref gp, ref u)| {
-                 markup::Player {
-                     color: color::Color::from_str(&gp.color).unwrap().into(),
-                     name: u.name.to_owned(),
-                 }
+                 Ok(markup::Player {
+                        color: color::Color::from_str(&gp.color)?.into(),
+                        name: u.name.to_owned(),
+                    })
              })
         .collect()
 }

@@ -5,6 +5,8 @@ use uuid::Uuid;
 use brdgme_cmd::cli;
 use brdgme_markup as markup;
 
+use std::sync::mpsc::{channel, Sender, Receiver};
+
 use errors::*;
 use config::CONFIG;
 use db::models::*;
@@ -20,10 +22,47 @@ pub fn connect() -> Result<Client> {
     Client::open(CONFIG.redis_url.as_ref()).chain_err(|| "unable to open client")
 }
 
+pub struct GameUpdater {
+    rx: Receiver<GameUpdateOpts>,
+}
+
+impl GameUpdater {
+    pub fn new() -> (Self, Sender<GameUpdateOpts>) {
+        let (tx, rx) = channel();
+        (GameUpdater { rx }, tx)
+    }
+
+    pub fn run(&self) {
+        loop {
+            match self.rx.recv() {
+                Ok(opts) => {
+                    if let Err(e) = game_update(&opts.game,
+                                                &opts.game_logs,
+                                                &opts.public_render,
+                                                &opts.player_renders,
+                                                &opts.user_auth_tokens) {
+                        warn!("error sending game update: {}", e);
+                    }
+                }
+                Err(e) => warn!("error receiving game update options: {}", e),
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GameUpdateOpts {
+    pub game: PublicGameExtended,
+    pub game_logs: Vec<CreatedGameLog>,
+    pub public_render: cli::Render,
+    pub player_renders: Vec<cli::Render>,
+    pub user_auth_tokens: Vec<UserAuthToken>,
+}
+
 fn created_logs_for_player(player_id: Option<Uuid>,
                            logs: &[CreatedGameLog],
                            players: &[markup::Player])
-                           -> Vec<RenderedGameLog> {
+                           -> Result<Vec<RenderedGameLog>> {
     logs.iter()
         .filter(|gl| {
                     gl.game_log.is_public ||
@@ -31,15 +70,10 @@ fn created_logs_for_player(player_id: Option<Uuid>,
                         .and_then(|p_id| gl.targets.iter().find(|t| t.game_player_id == p_id))
                         .is_some()
                 })
-        .map(|gl| gl.game_log.to_owned().into_rendered(players).unwrap())
+        .map(|gl| Ok(gl.game_log.to_owned().into_rendered(players)?))
         .collect()
 }
 
-#[derive(Serialize)]
-pub struct GameUpdateOpts<'a> {
-    pub game: &'a PublicGame,
-    pub game_version: &'a PublicGameVersion,
-}
 pub fn game_update<'a>(game: &'a PublicGameExtended,
                        game_logs: &[CreatedGameLog],
                        public_render: &cli::Render,
@@ -49,7 +83,7 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
     let conn = CLIENT
         .get_connection()
         .chain_err(|| "unable to get Redis connection from client")?;
-    let markup_players = render::public_game_players_to_markup_players(&game.game_players);
+    let markup_players = render::public_game_players_to_markup_players(&game.game_players)?;
     let mut pipe = redis::pipe();
     pipe.cmd("PUBLISH")
         .arg(format!("game.{}", game.game.id))
@@ -61,7 +95,7 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
                                        game_players: game.game_players.to_owned(),
                                        game_logs: created_logs_for_player(None,
                                                                           game_logs,
-                                                                          &markup_players),
+                                                                          &markup_players)?,
                                        pub_state: public_render.pub_state.to_owned(),
                                        html: render::markup_html(&public_render.render,
                                                                  &markup_players)?,
@@ -80,7 +114,9 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
             game_type: game.game_type.to_owned(),
             game_version: game.game_version.to_owned(),
             game_players: game.game_players.to_owned(),
-            game_logs: created_logs_for_player(Some(gp.game_player.id), game_logs, &markup_players),
+            game_logs: created_logs_for_player(Some(gp.game_player.id),
+                                               game_logs,
+                                               &markup_players)?,
             pub_state: player_render.pub_state.to_owned(),
             html: render::markup_html(&player_render.render, &markup_players)?,
             command_spec: player_render.command_spec.to_owned(),

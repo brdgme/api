@@ -16,6 +16,7 @@ extern crate r2d2;
 extern crate rand;
 extern crate chrono;
 extern crate lettre;
+#[macro_use]
 extern crate log;
 extern crate env_logger;
 extern crate uuid;
@@ -47,8 +48,15 @@ mod errors;
 mod websocket;
 mod render;
 
+use std::thread;
+use std::sync::Mutex;
+
 fn main() {
+    let (game_updater, game_update_tx) = websocket::GameUpdater::new();
+    thread::spawn(move || game_updater.run());
+
     rocket::ignite()
+        .manage(Mutex::new(game_update_tx))
         .mount("/game",
                routes![
             controller::game::create,

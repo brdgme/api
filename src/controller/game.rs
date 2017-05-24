@@ -1,3 +1,4 @@
+use rocket::State;
 use rocket_contrib::JSON;
 use uuid::Uuid;
 use diesel::Connection;
@@ -10,6 +11,8 @@ use brdgme_markup as markup;
 
 use std::collections::HashMap;
 use std::borrow::Cow;
+use std::sync::Mutex;
+use std::sync::mpsc::Sender;
 
 use db::{query, models};
 use errors::*;
@@ -172,7 +175,7 @@ fn game_extended_to_show_response(game_player: Option<&models::GamePlayer>,
     let (nodes, _) = markup::from_string(&render.render)
         .chain_err(|| "error parsing render markup")?;
 
-    let markup_players = render::game_players_to_markup_players(&game_extended.game_players);
+    let markup_players = render::game_players_to_markup_players(&game_extended.game_players)?;
     let game_logs = match game_player {
         Some(gp) => query::find_game_logs_for_player(&gp.id, conn),
         None => query::find_public_game_logs_for_game(&game_extended.game.id, conn),
@@ -202,6 +205,7 @@ pub struct CommandRequest {
 #[post("/<id>/command", data = "<data>")]
 pub fn command(id: UuidParam,
                user: models::User,
+               game_update_tx: State<Mutex<Sender<websocket::GameUpdateOpts>>>,
                data: JSON<CommandRequest>)
                -> Result<CORS<JSON<ShowResponse>>> {
     let id = id.into_uuid();
@@ -276,13 +280,32 @@ pub fn command(id: UuidParam,
         let user_ids: Vec<Uuid> = game_extended
             .game_players
             .iter()
-            .map(|gp| gp.1.id.clone())
+            .map(|gp| gp.1.id)
             .collect();
-        websocket::game_update(&game_extended.clone().into_public(),
-                               &created_logs,
-                               &public_render,
-                               &player_renders,
-                               &query::find_valid_user_auth_tokens_for_users(&user_ids, conn)?)?;
+        let tx = {
+            game_update_tx
+                .inner()
+                .lock()
+                .map_err::<Error, _>(|_| {
+                                         ErrorKind::Msg("unable to get lock on game_update_tx"
+                                                            .to_string())
+                                                 .into()
+                                     })?
+                .clone()
+        };
+        tx.send(websocket::GameUpdateOpts {
+                      game: game_extended.clone().into_public(),
+                      game_logs: created_logs.clone(),
+                      public_render: public_render.clone(),
+                      player_renders: player_renders.clone(),
+                      user_auth_tokens: query::find_valid_user_auth_tokens_for_users(&user_ids,
+                                                                                     conn)?,
+                  })
+            .map_err::<Error, _>(|_| {
+                                     ErrorKind::Msg("unable to send game update options"
+                                                        .to_string())
+                                             .into()
+                                 })?;
         let gp = game_extended
             .game_players
             .iter()

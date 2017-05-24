@@ -31,7 +31,7 @@ impl User {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PublicUser {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -128,7 +128,7 @@ impl GameVersion {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PublicGameVersion {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -237,7 +237,7 @@ impl GamePlayer {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PublicGamePlayer {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -274,7 +274,7 @@ pub struct NewGamePlayer<'a> {
     pub undo_game_state: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PublicGamePlayerUser {
     pub game_player: PublicGamePlayer,
     pub user: PublicUser,
