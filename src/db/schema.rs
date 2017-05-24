@@ -36,6 +36,8 @@ table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         name -> VarChar,
+        player_counts -> Array<Integer>,
+        weight -> Float,
     }
 }
 
@@ -114,7 +116,7 @@ table! {
         updated_at -> Timestamp,
         game_type_id -> Uuid,
         user_id -> Uuid,
-        last_game_finished_at -> Timestamp,
+        last_game_finished_at -> Nullable<Timestamp>,
         rating -> Integer,
         peak_rating -> Integer,
     }

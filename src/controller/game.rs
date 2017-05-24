@@ -130,7 +130,7 @@ pub struct ShowResponse {
     pub game_version: models::PublicGameVersion,
     pub game_type: models::PublicGameType,
     pub game_player: Option<models::PublicGamePlayer>,
-    pub game_players: Vec<models::PublicGamePlayerUser>,
+    pub game_players: Vec<models::PublicGamePlayerTypeUser>,
     pub html: String,
     pub game_logs: Vec<models::RenderedGameLog>,
     pub command_spec: Option<CommandSpec>,
@@ -146,8 +146,8 @@ pub fn show(id: UuidParam, user: Option<models::User>) -> Result<CORS<JSON<ShowR
         game_extended
             .game_players
             .iter()
-            .find(|&&(ref gp, _)| u.id == gp.user_id)
-            .map(|&(ref gp, _)| gp)
+            .find(|&gptu| u.id == gptu.user.id)
+            .map(|gptu| &gptu.game_player)
     });
     Ok(CORS(JSON(game_extended_to_show_response(game_player, &game_extended, None, conn)?)))
 }
@@ -280,7 +280,7 @@ pub fn command(id: UuidParam,
         let user_ids: Vec<Uuid> = game_extended
             .game_players
             .iter()
-            .map(|gp| gp.1.id)
+            .map(|gptu| gptu.user.id)
             .collect();
         let tx = {
             game_update_tx
@@ -309,8 +309,8 @@ pub fn command(id: UuidParam,
         let gp = game_extended
             .game_players
             .iter()
-            .find(|gp| gp.0.id == player.id)
-            .map(|gp| &gp.0);
+            .find(|gptu| gptu.game_player.id == player.id)
+            .map(|gptu| &gptu.game_player);
         Ok(CORS(JSON(game_extended_to_show_response(gp,
                                                     &game_extended,
                                                     gp.and_then(|gp| {
@@ -394,7 +394,7 @@ pub struct MyActiveGame {
     pub game_type: models::PublicGameType,
     pub game_version: models::PublicGameVersion,
     pub game_player: Option<models::PublicGamePlayer>,
-    pub game_players: Vec<models::PublicGamePlayerUser>,
+    pub game_players: Vec<models::PublicGamePlayerTypeUser>,
 }
 
 #[derive(Serialize)]

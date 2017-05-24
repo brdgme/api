@@ -211,7 +211,7 @@ pub struct GameExtended {
     pub game: Game,
     pub game_type: GameType,
     pub game_version: GameVersion,
-    pub game_players: Vec<(GamePlayer, User)>,
+    pub game_players: Vec<GamePlayerTypeUser>,
 }
 
 impl GameExtended {
@@ -222,12 +222,7 @@ impl GameExtended {
             game_version: self.game_version.into_public(),
             game_players: self.game_players
                 .into_iter()
-                .map(|(gp, u)| {
-                         PublicGamePlayerUser {
-                             game_player: gp.into_public(),
-                             user: u.into_public(),
-                         }
-                     })
+                .map(|gptu| gptu.into_public())
                 .collect(),
         }
     }
@@ -238,7 +233,7 @@ pub struct PublicGameExtended {
     pub game: PublicGame,
     pub game_type: PublicGameType,
     pub game_version: PublicGameVersion,
-    pub game_players: Vec<PublicGamePlayerUser>,
+    pub game_players: Vec<PublicGamePlayerTypeUser>,
 }
 
 pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<GameExtended>> {
@@ -261,7 +256,7 @@ pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<
         let game_type: GameType = game_types::table
             .find(game_version.game_type_id)
             .get_result(conn)?;
-        let players = find_game_players_with_user_by_game(&game.id, conn)?;
+        let players = find_game_player_type_users_by_game(&game.id, conn)?;
         Ok(GameExtended {
                game: game.clone(),
                game_type: game_type,
@@ -282,7 +277,7 @@ pub fn find_game_extended(id: &Uuid, conn: &PgConnection) -> Result<GameExtended
     let game_type: GameType = game_types::table
         .find(game_version.game_type_id)
         .get_result(conn)?;
-    let players = find_game_players_with_user_by_game(&game.id, conn)?;
+    let players = find_game_player_type_users_by_game(&game.id, conn)?;
     Ok(GameExtended {
            game: game.clone(),
            game_type: game_type,
@@ -335,6 +330,15 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
         let game = create_game(opts.new_game, conn)
             .chain_err(|| "could not create new game")?;
 
+        // Find or create game type user records.
+        let game_version = find_game_version(&opts.new_game.game_version_id, conn)?
+            .ok_or_else::<Error, _>(|| "could not find game version".into())?;
+        let mut game_type_users: Vec<GameTypeUser> = vec![];
+        for user in &users {
+            game_type_users
+                .push(find_or_create_game_type_user(&user.id, &game_version.game_type_id, conn)?);
+        }
+
         // Create a player record for each user.
         let mut players: Vec<GamePlayer> = vec![];
         for (pos, user) in users.iter().enumerate() {
@@ -362,6 +366,44 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
                players: players,
            })
     })
+}
+
+pub fn find_or_create_game_type_user(game_type_id: &Uuid,
+                                     user_id: &Uuid,
+                                     conn: &PgConnection)
+                                     -> Result<GameTypeUser> {
+    if let Some(gtu) = find_game_type_user_by_game_type_and_user(game_type_id, user_id, conn)? {
+        return Ok(gtu);
+    }
+    create_game_type_user(&NewGameTypeUser {
+                              game_type_id: game_type_id.to_owned(),
+                              user_id: user_id.to_owned(),
+                              last_game_finished_at: None,
+                              rating: None,
+                              peak_rating: None,
+                          },
+                          conn)
+}
+
+pub fn find_game_type_user_by_game_type_and_user(game_type_id: &Uuid,
+                                                 user_id: &Uuid,
+                                                 conn: &PgConnection)
+                                                 -> Result<Option<GameTypeUser>> {
+    use db::schema::game_type_users;
+    game_type_users::table
+        .filter(game_type_users::game_type_id.eq(game_type_id))
+        .filter(game_type_users::user_id.eq(user_id))
+        .get_result(conn)
+        .optional()
+        .chain_err(|| "error finding game type user")
+}
+
+pub fn create_game_type_user(gtu: &NewGameTypeUser, conn: &PgConnection) -> Result<GameTypeUser> {
+    use db::schema::game_type_users;
+    diesel::insert(gtu)
+        .into(game_type_users::table)
+        .get_result(conn)
+        .chain_err(|| "error inserting new game type user")
 }
 
 pub fn player_can_undo_set_undo_game_state(game_id: &Uuid,
@@ -524,6 +566,35 @@ pub fn find_game_players_by_game(game_id: &Uuid, conn: &PgConnection) -> Result<
         .order(game_players::position)
         .get_results(conn)
         .chain_err(|| "error finding players")
+}
+
+pub fn find_game_player_type_users_by_game(game_id: &Uuid,
+                                           conn: &PgConnection)
+                                           -> Result<Vec<GamePlayerTypeUser>> {
+    use db::schema::{game_versions, game_players, users, games};
+
+    let (game_version, _) = game_versions::table
+        .inner_join(games::table)
+        .filter(games::id.eq(game_id))
+        .get_result::<(GameVersion, Game)>(conn)
+        .chain_err(|| "error finding game version")?;
+
+    game_players::table
+        .filter(game_players::game_id.eq(game_id))
+        .order(game_players::position)
+        .inner_join(users::table)
+        .get_results::<(GamePlayer, User)>(conn)
+        .chain_err(|| "error finding game players")?
+        .into_iter()
+        .map(|(gp, u)| {
+                 let gtu = find_or_create_game_type_user(&game_version.game_type_id, &u.id, conn)?;
+                 Ok(GamePlayerTypeUser {
+                        game_player: gp,
+                        user: u,
+                        game_type_user: gtu,
+                    })
+             })
+        .collect()
 }
 
 pub fn find_game_players_with_user_by_game(game_id: &Uuid,
@@ -800,7 +871,6 @@ mod tests {
                         .expect("error confirming auth")
                         .expect("invalid confirm code");
                     assert!(authenticate(&uat.id, conn).unwrap().is_some());
-                    assert!(authenticate(&uat.id, conn).unwrap().is_none());
                 });
     }
 
@@ -842,7 +912,13 @@ mod tests {
     #[ignore]
     fn create_game_works() {
         with_db(|conn| {
-            let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
+            let game_type = create_game_type(&NewGameType {
+                                                 name: "Lost Cities",
+                                                 player_counts: vec![2],
+                                                 weight: 1.52,
+                                             },
+                                             conn)
+                    .unwrap();
             let game_version = create_game_version(&NewGameVersion {
                                                        game_type_id: game_type.id,
                                                        uri: "https://example.com/lost-cities-1",
@@ -868,7 +944,13 @@ mod tests {
         with_db(|conn| {
             let (_, p1) = create_user_by_email("beefsack@gmail.com", conn).unwrap();
             let (_, p2) = create_user_by_email("beefsack+two@gmail.com", conn).unwrap();
-            let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
+            let game_type = create_game_type(&NewGameType {
+                                                 name: "Lost Cities",
+                                                 player_counts: vec![2],
+                                                 weight: 1.52,
+                                             },
+                                             conn)
+                    .unwrap();
             let game_version = create_game_version(&NewGameVersion {
                                                        game_type_id: game_type.id,
                                                        uri: "https://example.com/lost-cities-1",
@@ -926,7 +1008,13 @@ mod tests {
         with_db(|conn| {
             let (_, p1) = create_user_by_email("beefsack@gmail.com", conn).unwrap();
             let (_, p2) = create_user_by_email("beefsack+two@gmail.com", conn).unwrap();
-            let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
+            let game_type = create_game_type(&NewGameType {
+                                                 name: "Lost Cities",
+                                                 player_counts: vec![2],
+                                                 weight: 1.52,
+                                             },
+                                             conn)
+                    .unwrap();
             let game_version = create_game_version(&NewGameVersion {
                                                        game_type_id: game_type.id,
                                                        uri: "https://example.com/lost-cities-1",
@@ -954,7 +1042,13 @@ mod tests {
         with_db(|conn| {
             let (_, p1) = create_user_by_email("beefsack@gmail.com", conn).unwrap();
             let (_, p2) = create_user_by_email("beefsack+two@gmail.com", conn).unwrap();
-            let game_type = create_game_type(&NewGameType { name: "Lost Cities" }, conn).unwrap();
+            let game_type = create_game_type(&NewGameType {
+                                                 name: "Lost Cities",
+                                                 player_counts: vec![2],
+                                                 weight: 1.52,
+                                             },
+                                             conn)
+                    .unwrap();
             let game_version = create_game_version(&NewGameVersion {
                                                        game_type_id: game_type.id,
                                                        uri: "https://example.com/lost-cities-1",

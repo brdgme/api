@@ -6,7 +6,7 @@ use brdgme_markup as markup;
 use db::schema::*;
 use errors::*;
 
-#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
 #[has_many(user_emails)]
 #[has_many(game_players)]
 #[has_many(user_auth_tokens)]
@@ -90,6 +90,8 @@ pub struct GameType {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub name: String,
+    pub player_counts: Vec<i32>,
+    pub weight: f32,
 }
 
 pub type PublicGameType = GameType;
@@ -98,6 +100,8 @@ pub type PublicGameType = GameType;
 #[table_name="game_types"]
 pub struct NewGameType<'a> {
     pub name: &'a str,
+    pub player_counts: Vec<i32>,
+    pub weight: f32,
 }
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
@@ -275,9 +279,27 @@ pub struct NewGamePlayer<'a> {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct PublicGamePlayerUser {
+pub struct GamePlayerTypeUser {
+    pub game_player: GamePlayer,
+    pub user: User,
+    pub game_type_user: GameTypeUser,
+}
+
+impl GamePlayerTypeUser {
+    pub fn into_public(self) -> PublicGamePlayerTypeUser {
+        PublicGamePlayerTypeUser {
+            game_player: self.game_player.into_public(),
+            user: self.user.into_public(),
+            game_type_user: self.game_type_user,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PublicGamePlayerTypeUser {
     pub game_player: PublicGamePlayer,
     pub user: PublicUser,
+    pub game_type_user: PublicGameTypeUser,
 }
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
@@ -344,7 +366,7 @@ pub struct NewGameLogTarget {
     pub game_player_id: Uuid,
 }
 
-#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[belongs_to(GameType)]
 #[belongs_to(User)]
 pub struct GameTypeUser {
@@ -358,14 +380,16 @@ pub struct GameTypeUser {
     pub peak_rating: i32,
 }
 
+pub type PublicGameTypeUser = GameTypeUser;
+
 #[derive(Insertable)]
 #[table_name="game_type_users"]
 pub struct NewGameTypeUser {
     pub game_type_id: Uuid,
     pub user_id: Uuid,
     pub last_game_finished_at: Option<NaiveDateTime>,
-    pub rating: i32,
-    pub peak_rating: i32,
+    pub rating: Option<i32>,
+    pub peak_rating: Option<i32>,
 }
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
