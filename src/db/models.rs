@@ -237,6 +237,7 @@ impl GamePlayer {
             is_winner: self.is_winner,
             is_read: self.is_read,
             points: self.points,
+            can_undo: self.undo_game_state.is_some(),
         }
     }
 }
@@ -258,6 +259,7 @@ pub struct PublicGamePlayer {
     pub is_winner: bool,
     pub is_read: bool,
     pub points: Option<f32>,
+    pub can_undo: bool,
 }
 
 #[derive(Insertable)]

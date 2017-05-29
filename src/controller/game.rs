@@ -3,6 +3,7 @@ use rocket_contrib::JSON;
 use uuid::Uuid;
 use diesel::Connection;
 use diesel::pg::PgConnection;
+use chrono::UTC;
 
 use brdgme_cmd::cli;
 use brdgme_game::{Status, Stat};
@@ -323,7 +324,10 @@ pub fn command(id: UuidParam,
 }
 
 #[post("/<id>/undo")]
-pub fn undo(id: UuidParam, user: models::User) -> Result<CORS<JSON<query::PublicGameExtended>>> {
+pub fn undo(id: UuidParam,
+            user: models::User,
+            game_update_tx: State<Mutex<Sender<websocket::GameUpdateOpts>>>)
+            -> Result<CORS<JSON<ShowResponse>>> {
     let id = id.into_uuid();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
@@ -336,10 +340,31 @@ pub fn undo(id: UuidParam, user: models::User) -> Result<CORS<JSON<query::Public
                                             .into()
                                     })?;
 
-        let game_response =
+        let player = query::find_game_player_by_user_and_game(&user.id, &id, conn)
+            .chain_err(|| "error finding game player")?
+            .ok_or_else::<Error, _>(|| {
+                                        ErrorKind::UserError("you aren't a player in this game"
+                                                                 .to_string())
+                                                .into()
+                                    })?;
+
+        let undo_state = player
+            .undo_game_state
+            .clone()
+            .ok_or_else::<Error, _>(|| {
+                                        ErrorKind::UserError("you can't undo at the moment"
+                                                                 .to_string())
+                                                .into()
+                                    })?;
+
+        let (game_response, public_render, player_renders) =
             match game_client::request(&game_version.uri,
-                                       &cli::Request::Status { game: game.game_state.clone() })? {
-                cli::Response::Status { game } => (game),
+                                       &cli::Request::Status { game: undo_state.clone() })? {
+                cli::Response::Status {
+                    game,
+                    public_render,
+                    player_renders,
+                } => (game, public_render, player_renders),
                 _ => bail!("invalid response type"),
             };
         let status = game_status_values(&game_response.status);
@@ -355,7 +380,62 @@ pub fn undo(id: UuidParam, user: models::User) -> Result<CORS<JSON<query::Public
                                                          &status.winners,
                                                          conn)
                 .chain_err(|| "error updating game")?;
-        Ok(CORS(JSON(query::find_game_extended(&id, conn)?.into_public())))
+        query::player_cannot_undo_set_undo_game_state(&id, conn)
+            .chain_err(|| "unable to clear undo_game_state for all players")?;
+        let created_log = query::create_game_log(&models::NewGameLog{
+                game_id: id,
+                body: &markup::to_string(&[
+                    markup::Node::Player(player.position as usize),
+                    markup::Node::text(" used an undo"),
+                ]),
+                is_public: true,
+                logged_at: UTC::now().naive_utc(),
+            }, &[], conn)
+            .chain_err(|| "unable to create undo game log")?;
+        let game_extended = query::find_game_extended(&id, conn)
+            .chain_err(|| "unable to get extended game")?;
+        let user_ids: Vec<Uuid> = game_extended
+            .game_players
+            .iter()
+            .map(|gptu| gptu.user.id)
+            .collect();
+        let tx = {
+            game_update_tx
+                .inner()
+                .lock()
+                .map_err::<Error, _>(|_| {
+                                         ErrorKind::Msg("unable to get lock on game_update_tx"
+                                                            .to_string())
+                                                 .into()
+                                     })?
+                .clone()
+        };
+        tx.send(websocket::GameUpdateOpts {
+                      game: game_extended.clone().into_public(),
+                      game_logs: vec![created_log],
+                      public_render: public_render.clone(),
+                      player_renders: player_renders.clone(),
+                      user_auth_tokens: query::find_valid_user_auth_tokens_for_users(&user_ids,
+                                                                                     conn)?,
+                  })
+            .map_err::<Error, _>(|_| {
+                                     ErrorKind::Msg("unable to send game update options"
+                                                        .to_string())
+                                             .into()
+                                 })?;
+        let gp = game_extended
+            .game_players
+            .iter()
+            .find(|gptu| gptu.game_player.id == player.id)
+            .map(|gptu| &gptu.game_player);
+        Ok(CORS(JSON(game_extended_to_show_response(gp,
+                                                    &game_extended,
+                                                    gp.and_then(|gp| {
+                                                                    player_renders
+                                                                        .get(gp.position as
+                                                                             usize)
+                                                                }),
+                                                    conn)?)))
     })
 }
 

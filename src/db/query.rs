@@ -415,7 +415,7 @@ pub fn player_can_undo_set_undo_game_state(game_id: &Uuid,
     conn.transaction(|| {
         diesel::update(game_players::table
                            .find(game_player_id)
-                           .filter(game_players::undo_game_state.eq(None::<String>)))
+                           .filter(game_players::undo_game_state.is_null()))
                 .set(game_players::undo_game_state.eq(game_state))
                 .execute(conn)
                 .chain_err(|| "error updating game player undo_game_state to game_state")?;
@@ -566,6 +566,21 @@ pub fn find_game_players_by_game(game_id: &Uuid, conn: &PgConnection) -> Result<
         .order(game_players::position)
         .get_results(conn)
         .chain_err(|| "error finding players")
+}
+
+pub fn find_game_player_by_user_and_game(user_id: &Uuid,
+                                         game_id: &Uuid,
+                                         conn: &PgConnection)
+                                         -> Result<Option<GamePlayer>> {
+    use db::schema::game_players;
+
+    game_players::table
+        .filter(game_players::user_id.eq(user_id))
+        .filter(game_players::game_id.eq(game_id))
+        .order(game_players::position)
+        .get_result(conn)
+        .optional()
+        .chain_err(|| "error finding player")
 }
 
 pub fn find_game_player_type_users_by_game(game_id: &Uuid,
