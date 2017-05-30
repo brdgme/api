@@ -3,6 +3,7 @@ use rocket::response::{self, Responder};
 use rocket::http::RawStr;
 use rocket::http::hyper::header::{AccessControlAllowOrigin, AccessControlAllowMethods,
                                   AccessControlAllowHeaders, AccessControlAllowCredentials};
+use rocket_contrib::JSON;
 use hyper::method::Method;
 use uuid::Uuid;
 use unicase::UniCase;
@@ -15,6 +16,7 @@ pub mod game;
 pub mod mail;
 
 use errors::*;
+use db::{models, query, CONN};
 
 pub struct UuidParam(Uuid);
 
@@ -53,4 +55,34 @@ impl<'r, R: Responder<'r>> Responder<'r> for CORS<R> {
 #[options("/<path..>")]
 pub fn options(path: PathBuf) -> CORS<()> {
     CORS(())
+}
+
+#[derive(Serialize, Debug)]
+pub struct InitResponse {
+    pub game_version_types: Vec<models::PublicGameVersionType>,
+    pub games: Vec<query::PublicGameExtended>,
+    pub user: Option<models::PublicUser>,
+}
+
+#[get("/init")]
+pub fn init(user: Option<models::User>) -> Result<CORS<JSON<InitResponse>>> {
+    let conn = &*CONN.r.get().chain_err(|| "unable to get connection")?;
+
+    Ok(CORS(JSON(InitResponse {
+                     game_version_types: query::public_game_versions(conn)
+                         .chain_err(|| "unable to get public game versions")?
+                         .into_iter()
+                         .map(|gvt| gvt.into_public())
+                         .collect(),
+                     games: user.as_ref()
+                         .map(|u| {
+                                  query::find_active_games_for_user(&u.id, conn)
+                                      .unwrap()
+                                      .into_iter()
+                                      .map(|ge| ge.into_public())
+                                      .collect()
+                              })
+                         .unwrap_or_else(|| vec![]),
+                     user: user.map(|u| u.into_public()),
+                 })))
 }

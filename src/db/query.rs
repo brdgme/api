@@ -336,7 +336,7 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
         let mut game_type_users: Vec<GameTypeUser> = vec![];
         for user in &users {
             game_type_users
-                .push(find_or_create_game_type_user(&user.id, &game_version.game_type_id, conn)?);
+                .push(find_or_create_game_type_user(&game_version.game_type_id, &user.id, conn)?);
         }
 
         // Create a player record for each user.
@@ -777,15 +777,23 @@ pub fn create_game_player(player: &NewGamePlayer, conn: &PgConnection) -> Result
         .chain_err(|| "error inserting game player")
 }
 
-pub fn public_game_versions(conn: &PgConnection) -> Result<Vec<(GameVersion, GameType)>> {
+pub fn public_game_versions(conn: &PgConnection) -> Result<Vec<GameVersionType>> {
     use db::schema::{game_versions, game_types};
 
-    game_versions::table
-        .filter(game_versions::is_public.eq(true))
-        .filter(game_versions::is_deprecated.eq(false))
-        .inner_join(game_types::table)
-        .get_results(conn)
-        .chain_err(|| "error finding game versions")
+    Ok(game_versions::table
+           .filter(game_versions::is_public.eq(true))
+           .filter(game_versions::is_deprecated.eq(false))
+           .inner_join(game_types::table)
+           .get_results::<(GameVersion, GameType)>(conn)
+           .chain_err(|| "error finding game versions")?
+           .into_iter()
+           .map(|(game_version, game_type)| {
+                    GameVersionType {
+                        game_version,
+                        game_type,
+                    }
+                })
+           .collect())
 }
 
 pub fn find_public_game_logs_for_game(game_id: &Uuid, conn: &PgConnection) -> Result<Vec<GameLog>> {

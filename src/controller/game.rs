@@ -30,13 +30,9 @@ pub struct CreateRequest {
     opponent_emails: Option<Vec<String>>,
 }
 
-#[derive(Serialize)]
-pub struct CreateResponse {
-    id: Uuid,
-}
-
 #[post("/", data = "<data>")]
-pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON<CreateResponse>>> {
+pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON<ShowResponse>>> {
+    let user_id = user.id;
     let data = data.into_inner();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
@@ -73,7 +69,7 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
                                                       eliminated: &status.eliminated,
                                                       winners: &status.winners,
                                                       points: &game_info.points,
-                                                      creator_id: &user.id,
+                                                      creator_id: &user_id,
                                                       opponent_ids: &opponent_ids,
                                                       opponent_emails: &opponent_emails,
                                                   },
@@ -83,18 +79,25 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
                     query::create_game_logs_from_cli(&created_game.game.id, logs, conn)
                         .chain_err(|| "unable to create game logs")?;
                 let mut user_ids = opponent_ids.clone();
-                user_ids.push(user.id);
+                user_ids.push(user_id.clone());
                 Ok((created_game, created_logs, public_render, player_renders, user_ids))
             })
             .chain_err(|| "error committing transaction")?;
-    websocket::game_update(&query::find_game_extended(&created_game.game.id, conn)
-                                .chain_err(|| "unable to get extended game")?
-                                .into_public(),
+    let game_extended = query::find_game_extended(&created_game.game.id, conn)
+        .chain_err(|| "unable to get extended game")?;
+    let player = created_game.players.iter().find(|p| p.user_id == user_id);
+    websocket::game_update(&game_extended.clone().into_public(),
                            &created_logs,
                            &public_render,
                            &player_renders,
                            &query::find_valid_user_auth_tokens_for_users(&user_ids, conn)?)?;
-    Ok(CORS(JSON(CreateResponse { id: created_game.game.id })))
+    Ok(CORS(JSON(game_extended_to_show_response(player,
+                                                &game_extended,
+                                                player.and_then(|p| {
+                                                                    player_renders.get(p.position as
+                                                                                       usize)
+                                                                }),
+                                                conn)?)))
 }
 
 struct StatusValues {
@@ -437,72 +440,4 @@ pub fn undo(id: UuidParam,
                                                                 }),
                                                     conn)?)))
     })
-}
-
-#[derive(Serialize)]
-pub struct VersionPublicResponse {
-    versions: Vec<GameVersionType>,
-}
-
-#[derive(Serialize)]
-struct GameVersionType {
-    game_version: models::PublicGameVersion,
-    game_type: models::PublicGameType,
-}
-
-#[get("/version_public")]
-pub fn version_public() -> Result<CORS<JSON<VersionPublicResponse>>> {
-    let conn = &*CONN.r.get().chain_err(|| "unable to get connection")?;
-
-    Ok(CORS(JSON(VersionPublicResponse {
-                     versions: query::public_game_versions(conn)
-                         .chain_err(|| "error getting public game versions")?
-                         .into_iter()
-                         .map(|(game_version, game_type)| {
-                                  GameVersionType {
-                                      game_version: game_version.into_public(),
-                                      game_type: game_type,
-                                  }
-                              })
-                         .collect(),
-                 })))
-}
-
-#[derive(Serialize)]
-pub struct MyActiveGame {
-    pub game: models::PublicGame,
-    pub game_type: models::PublicGameType,
-    pub game_version: models::PublicGameVersion,
-    pub game_player: Option<models::PublicGamePlayer>,
-    pub game_players: Vec<models::PublicGamePlayerTypeUser>,
-}
-
-#[derive(Serialize)]
-pub struct MyActiveResponse {
-    games: Vec<MyActiveGame>,
-}
-
-#[get("/my_active")]
-pub fn my_active(user: models::User) -> Result<CORS<JSON<MyActiveResponse>>> {
-    let conn = &*CONN.r.get().chain_err(|| "unable to get connection")?;
-
-    Ok(CORS(JSON(MyActiveResponse {
-                     games: query::find_active_games_for_user(&user.id, conn)
-                         .chain_err(|| "error getting active_games")?
-                         .into_iter()
-                         .map(|game_extended| {
-        let pg = game_extended.into_public();
-        MyActiveGame {
-            game: pg.game,
-            game_type: pg.game_type,
-            game_version: pg.game_version,
-            game_player: pg.game_players
-                .iter()
-                .find(|gp| gp.user.id == user.id)
-                .map(|gp| gp.game_player.to_owned()),
-            game_players: pg.game_players,
-        }
-    })
-                         .collect(),
-                 })))
 }

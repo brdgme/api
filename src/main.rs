@@ -62,8 +62,6 @@ fn main() {
             controller::game::create,
             controller::game::show,
             controller::game::command,
-            controller::game::version_public,
-            controller::game::my_active,
             controller::game::undo,
         ])
         .mount("/auth",
@@ -72,6 +70,6 @@ fn main() {
             controller::auth::confirm,
         ])
         .mount("/mail", routes![controller::mail::index])
-        .mount("/", routes![controller::options])
+        .mount("/", routes![controller::options, controller::init])
         .launch();
 }

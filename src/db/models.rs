@@ -27,6 +27,7 @@ impl User {
             created_at: self.created_at,
             updated_at: self.updated_at,
             name: self.name,
+            pref_colors: self.pref_colors,
         }
     }
 }
@@ -37,6 +38,7 @@ pub struct PublicUser {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub name: String,
+    pub pref_colors: Vec<String>,
 }
 
 #[derive(Insertable)]
@@ -151,6 +153,27 @@ pub struct NewGameVersion<'a> {
     pub uri: &'a str,
     pub is_public: bool,
     pub is_deprecated: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GameVersionType {
+    pub game_version: GameVersion,
+    pub game_type: GameType,
+}
+
+impl GameVersionType {
+    pub fn into_public(self) -> PublicGameVersionType {
+        PublicGameVersionType {
+            game_version: self.game_version.into_public(),
+            game_type: self.game_type,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PublicGameVersionType {
+    pub game_version: PublicGameVersion,
+    pub game_type: PublicGameType,
 }
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]

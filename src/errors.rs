@@ -51,7 +51,16 @@ impl<'r> Responder<'r> for Error {
                        .sized_body(Cursor::new(message.to_owned()))
                        .finalize())
             }
-            _ => Err(Status::InternalServerError),
+            _ => {
+                error!("error: {}", self);
+                for e in self.iter().skip(1) {
+                    error!("caused by: {}", e);
+                }
+                if let Some(backtrace) = self.backtrace() {
+                    error!("backtrace: {:?}", backtrace);
+                }
+                Err(Status::InternalServerError)
+            }
         }
     }
 }
