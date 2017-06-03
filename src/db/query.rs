@@ -220,11 +220,21 @@ impl GameExtended {
             game: self.game.into_public(),
             game_type: self.game_type,
             game_version: self.game_version.into_public(),
+            game_player: None,
             game_players: self.game_players
                 .into_iter()
                 .map(|gptu| gptu.into_public())
                 .collect(),
         }
+    }
+
+    pub fn into_public_for_user(self, user_id: &Uuid) -> PublicGameExtended {
+        let mut p = self.into_public();
+        p.game_player = p.game_players
+            .iter()
+            .find(|gp| gp.user.id == *user_id)
+            .map(|gp| gp.game_player.clone());
+        p
     }
 }
 
@@ -233,6 +243,7 @@ pub struct PublicGameExtended {
     pub game: PublicGame,
     pub game_type: PublicGameType,
     pub game_version: PublicGameVersion,
+    pub game_player: Option<PublicGamePlayer>,
     pub game_players: Vec<PublicGamePlayerTypeUser>,
 }
 

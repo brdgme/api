@@ -76,12 +76,16 @@ pub fn init(user: Option<models::User>) -> Result<CORS<JSON<InitResponse>>> {
                          .collect(),
                      games: user.as_ref()
                          .map(|u| {
-                                  query::find_active_games_for_user(&u.id, conn)
-                                      .unwrap()
-                                      .into_iter()
-                                      .map(|ge| ge.into_public())
-                                      .collect()
-                              })
+        query::find_active_games_for_user(&u.id, conn)
+            .unwrap()
+            .into_iter()
+            .map(|ge| {
+                     user.as_ref()
+                         .map(|u| ge.clone().into_public_for_user(&u.id))
+                         .unwrap_or_else(|| ge.into_public())
+                 })
+            .collect()
+    })
                          .unwrap_or_else(|| vec![]),
                      user: user.map(|u| u.into_public()),
                  })))
