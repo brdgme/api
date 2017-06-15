@@ -57,18 +57,22 @@ fn main() {
 
     rocket::ignite()
         .manage(Mutex::new(game_update_tx))
-        .mount("/game",
-               routes![
+        .mount(
+            "/game",
+            routes![
             controller::game::create,
             controller::game::show,
             controller::game::command,
             controller::game::undo,
-        ])
-        .mount("/auth",
-               routes![
+        ],
+        )
+        .mount(
+            "/auth",
+            routes![
             controller::auth::create,
             controller::auth::confirm,
-        ])
+        ],
+        )
         .mount("/mail", routes![controller::mail::index])
         .mount("/", routes![controller::options, controller::init])
         .launch();

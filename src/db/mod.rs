@@ -21,9 +21,11 @@ pub struct Connection {}
 impl Connection {
     pub fn get(&self) -> Result<Box<PgConnection>> {
         use diesel::Connection;
-        Ok(Box::new(PgConnection::establish(&env::var("DATABASE_URL")
-                                                 .chain_err(|| "DATABASE_URL not set")?)
-                            .chain_err(|| "Unable to connect to database")?))
+        Ok(Box::new(PgConnection::establish(
+            &env::var("DATABASE_URL").chain_err(
+                || "DATABASE_URL not set",
+            )?,
+        ).chain_err(|| "Unable to connect to database")?))
     }
 }
 

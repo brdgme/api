@@ -42,7 +42,7 @@ pub struct PublicUser {
 }
 
 #[derive(Insertable)]
-#[table_name="users"]
+#[table_name = "users"]
 pub struct NewUser<'a> {
     pub name: &'a str,
     pub pref_colors: &'a [&'a str],
@@ -62,7 +62,7 @@ pub struct UserEmail {
 }
 
 #[derive(Insertable)]
-#[table_name="user_emails"]
+#[table_name = "user_emails"]
 pub struct NewUserEmail<'a> {
     pub user_id: Uuid,
     pub email: &'a str,
@@ -79,7 +79,7 @@ pub struct UserAuthToken {
 }
 
 #[derive(Insertable)]
-#[table_name="user_auth_tokens"]
+#[table_name = "user_auth_tokens"]
 pub struct NewUserAuthToken {
     pub user_id: Uuid,
 }
@@ -99,7 +99,7 @@ pub struct GameType {
 pub type PublicGameType = GameType;
 
 #[derive(Insertable)]
-#[table_name="game_types"]
+#[table_name = "game_types"]
 pub struct NewGameType<'a> {
     pub name: &'a str,
     pub player_counts: Vec<i32>,
@@ -146,7 +146,7 @@ pub struct PublicGameVersion {
 }
 
 #[derive(Insertable)]
-#[table_name="game_versions"]
+#[table_name = "game_versions"]
 pub struct NewGameVersion<'a> {
     pub game_type_id: Uuid,
     pub name: &'a str,
@@ -212,7 +212,7 @@ impl Game {
 }
 
 #[derive(Insertable)]
-#[table_name="games"]
+#[table_name = "games"]
 pub struct NewGame<'a> {
     pub game_version_id: Uuid,
     pub is_finished: bool,
@@ -286,7 +286,7 @@ pub struct PublicGamePlayer {
 }
 
 #[derive(Insertable)]
-#[table_name="game_players"]
+#[table_name = "game_players"]
 pub struct NewGamePlayer<'a> {
     pub game_id: Uuid,
     pub user_id: Uuid,
@@ -350,22 +350,23 @@ pub struct RenderedGameLog {
 
 impl GameLog {
     fn render(&self, players: &[markup::Player]) -> Result<String> {
-        let (parsed, _) = markup::from_string(&self.body)
-            .chain_err(|| "error parsing log body")?;
+        let (parsed, _) = markup::from_string(&self.body).chain_err(
+            || "error parsing log body",
+        )?;
         Ok(markup::html(&markup::transform(&parsed, players)))
     }
 
     pub fn into_rendered(self, players: &[markup::Player]) -> Result<RenderedGameLog> {
         let html = self.render(players)?;
         Ok(RenderedGameLog {
-               game_log: self,
-               html: html,
-           })
+            game_log: self,
+            html: html,
+        })
     }
 }
 
 #[derive(Insertable)]
-#[table_name="game_logs"]
+#[table_name = "game_logs"]
 pub struct NewGameLog<'a> {
     pub game_id: Uuid,
     pub body: &'a str,
@@ -385,7 +386,7 @@ pub struct GameLogTarget {
 }
 
 #[derive(Insertable)]
-#[table_name="game_log_targets"]
+#[table_name = "game_log_targets"]
 pub struct NewGameLogTarget {
     pub game_log_id: Uuid,
     pub game_player_id: Uuid,
@@ -408,7 +409,7 @@ pub struct GameTypeUser {
 pub type PublicGameTypeUser = GameTypeUser;
 
 #[derive(Insertable)]
-#[table_name="game_type_users"]
+#[table_name = "game_type_users"]
 pub struct NewGameTypeUser {
     pub game_type_id: Uuid,
     pub user_id: Uuid,
@@ -418,7 +419,7 @@ pub struct NewGameTypeUser {
 }
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
-#[belongs_to(User, foreign_key="target_user_id")]
+#[belongs_to(User, foreign_key = "target_user_id")]
 pub struct Friend {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -429,7 +430,7 @@ pub struct Friend {
 }
 
 #[derive(Insertable)]
-#[table_name="friends"]
+#[table_name = "friends"]
 pub struct NewFriend {
     pub source_user_id: Uuid,
     pub target_user_id: Uuid,
@@ -450,13 +451,12 @@ mod tests {
         let conn = &*CONN.w.get().unwrap();
         conn.begin_test_transaction().unwrap();
         diesel::insert(&NewUser {
-                           name: "blah",
-                           pref_colors: &[&Color::Green.to_string()],
-                           login_confirmation: None,
-                           login_confirmation_at: None,
-                       })
-                .into(schema::users::table)
-                .get_result::<User>(conn)
-                .expect("Error inserting user");
+            name: "blah",
+            pref_colors: &[&Color::Green.to_string()],
+            login_confirmation: None,
+            login_confirmation_at: None,
+        }).into(schema::users::table)
+            .get_result::<User>(conn)
+            .expect("Error inserting user");
     }
 }

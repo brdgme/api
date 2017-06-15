@@ -35,7 +35,8 @@ pub fn send<T: SendableEmail>(email: T) -> Result<()> {
 }
 
 pub fn html_layout(content: &str) -> String {
-    format!("
+    format!(
+        "
         <link
             href=\"https://fonts.googleapis.com/css?family=Source+Code+Pro:400,700\"
             rel=\"stylesheet\"
@@ -47,7 +48,8 @@ pub fn html_layout(content: &str) -> String {
                 font-family: 'Source Code Pro', 'Lucida Console', monospace;
             \"
         >{}</pre>",
-            content)
+        content
+    )
 }
 
 pub fn handle_inbound_email(e: &str) {

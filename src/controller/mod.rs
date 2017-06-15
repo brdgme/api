@@ -30,7 +30,9 @@ impl<'a> FromParam<'a> for UuidParam {
     type Error = Error;
 
     fn from_param(param: &'a RawStr) -> Result<Self> {
-        Ok(UuidParam(Uuid::from_str(param).chain_err(|| "failed to parse UUID")?))
+        Ok(UuidParam(
+            Uuid::from_str(param).chain_err(|| "failed to parse UUID")?,
+        ))
     }
 }
 
@@ -40,13 +42,17 @@ impl<'r, R: Responder<'r>> Responder<'r> for CORS<R> {
     fn respond_to(self, request: &Request) -> response::Result<'r> {
         let mut response = self.0.respond_to(request)?;
         response.set_header(AccessControlAllowOrigin::Any);
-        response.set_header(AccessControlAllowMethods(vec![Method::Get,
-                                                           Method::Post,
-                                                           Method::Put,
-                                                           Method::Delete,
-                                                           Method::Options]));
-        response.set_header(AccessControlAllowHeaders(vec![UniCase("Authorization".to_string()),
-                                                           UniCase("Content-Type".to_string())]));
+        response.set_header(AccessControlAllowMethods(vec![
+            Method::Get,
+            Method::Post,
+            Method::Put,
+            Method::Delete,
+            Method::Options,
+        ]));
+        response.set_header(AccessControlAllowHeaders(vec![
+            UniCase("Authorization".to_string()),
+            UniCase("Content-Type".to_string()),
+        ]));
         response.set_header(AccessControlAllowCredentials);
         Ok(response)
     }
@@ -69,24 +75,24 @@ pub fn init(user: Option<models::User>) -> Result<CORS<JSON<InitResponse>>> {
     let conn = &*CONN.r.get().chain_err(|| "unable to get connection")?;
 
     Ok(CORS(JSON(InitResponse {
-                     game_version_types: query::public_game_versions(conn)
-                         .chain_err(|| "unable to get public game versions")?
-                         .into_iter()
-                         .map(|gvt| gvt.into_public())
-                         .collect(),
-                     games: user.as_ref()
-                         .map(|u| {
-        query::find_active_games_for_user(&u.id, conn)
-            .unwrap()
+        game_version_types: query::public_game_versions(conn)
+            .chain_err(|| "unable to get public game versions")?
             .into_iter()
-            .map(|ge| {
-                     user.as_ref()
-                         .map(|u| ge.clone().into_public_for_user(&u.id))
-                         .unwrap_or_else(|| ge.into_public())
-                 })
-            .collect()
-    })
-                         .unwrap_or_else(|| vec![]),
-                     user: user.map(|u| u.into_public()),
-                 })))
+            .map(|gvt| gvt.into_public())
+            .collect(),
+        games: user.as_ref()
+            .map(|u| {
+                query::find_active_games_for_user(&u.id, conn)
+                    .unwrap()
+                    .into_iter()
+                    .map(|ge| {
+                        user.as_ref()
+                            .map(|u| ge.clone().into_public_for_user(&u.id))
+                            .unwrap_or_else(|| ge.into_public())
+                    })
+                    .collect()
+            })
+            .unwrap_or_else(|| vec![]),
+        user: user.map(|u| u.into_public()),
+    })))
 }

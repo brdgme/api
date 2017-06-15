@@ -18,13 +18,15 @@ pub enum Color {
     BlueGrey,
 }
 
-pub static COLORS: &'static [Color] = &[Color::Green,
-                                        Color::Red,
-                                        Color::Blue,
-                                        Color::Amber,
-                                        Color::Purple,
-                                        Color::Brown,
-                                        Color::BlueGrey];
+pub static COLORS: &'static [Color] = &[
+    Color::Green,
+    Color::Red,
+    Color::Blue,
+    Color::Amber,
+    Color::Purple,
+    Color::Brown,
+    Color::BlueGrey,
+];
 
 impl Color {
     pub fn from_strings(from: &[String]) -> Result<Vec<Color>> {
@@ -53,15 +55,14 @@ impl Into<brdgme_color::Color> for Color {
 impl ToString for Color {
     fn to_string(&self) -> String {
         match *self {
-                Color::Green => "Green",
-                Color::Red => "Red",
-                Color::Blue => "Blue",
-                Color::Amber => "Amber",
-                Color::Purple => "Purple",
-                Color::Brown => "Brown",
-                Color::BlueGrey => "BlueGrey",
-            }
-            .to_string()
+            Color::Green => "Green",
+            Color::Red => "Red",
+            Color::Blue => "Blue",
+            Color::Amber => "Amber",
+            Color::Purple => "Purple",
+            Color::Brown => "Brown",
+            Color::BlueGrey => "BlueGrey",
+        }.to_string()
     }
 }
 
@@ -70,15 +71,15 @@ impl FromStr for Color {
 
     fn from_str(s: &str) -> Result<Self> {
         Ok(match s {
-               "Green" => Color::Green,
-               "Red" => Color::Red,
-               "Blue" => Color::Blue,
-               "Amber" => Color::Amber,
-               "Purple" => Color::Purple,
-               "Brown" => Color::Brown,
-               "BlueGrey" => Color::BlueGrey,
-               _ => bail!("Invalid color"),
-           })
+            "Green" => Color::Green,
+            "Red" => Color::Red,
+            "Blue" => Color::Blue,
+            "Amber" => Color::Amber,
+            "Purple" => Color::Purple,
+            "Brown" => Color::Brown,
+            "BlueGrey" => Color::BlueGrey,
+            _ => bail!("Invalid color"),
+        })
     }
 }
 
@@ -134,11 +135,13 @@ pub fn choose(available: &HashSet<&Color>, prefs: &[Vec<Color>]) -> Vec<Color> {
     let mut left = remaining.drain();
     let mut res = vec![];
     for p in 0..rem_prefs.len() {
-        res.push(assigned
-                     .get(&p)
-                     .cloned()
-                     .unwrap_or_else(|| left.next().cloned().unwrap())
-                     .to_owned());
+        res.push(
+            assigned
+                .get(&p)
+                .cloned()
+                .unwrap_or_else(|| left.next().cloned().unwrap())
+                .to_owned(),
+        );
     }
     res.extend(tail);
     res
@@ -171,17 +174,24 @@ mod tests {
     #[test]
     fn choose_works() {
         use std::iter::FromIterator;
-        assert_eq!(vec![Color::Amber, Color::Blue, Color::Green],
-                   choose(&HashSet::from_iter(vec![Color::Amber, Color::Blue, Color::Green]
-                                                  .iter()),
-                          &[vec![], vec![Color::Blue, Color::Green], vec![Color::Green]]));
+        assert_eq!(
+            vec![Color::Amber, Color::Blue, Color::Green],
+            choose(
+                &HashSet::from_iter(vec![Color::Amber, Color::Blue, Color::Green].iter()),
+                &[vec![], vec![Color::Blue, Color::Green], vec![Color::Green]],
+            )
+        );
     }
 
     #[test]
     fn choose_with_extra_works() {
         use std::iter::FromIterator;
-        assert_eq!(vec![Color::Amber, Color::Amber, Color::Amber],
-                   choose(&HashSet::from_iter(vec![Color::Amber].iter()),
-                          &[vec![], vec![Color::Blue, Color::Green], vec![Color::Green]]));
+        assert_eq!(
+            vec![Color::Amber, Color::Amber, Color::Amber],
+            choose(
+                &HashSet::from_iter(vec![Color::Amber].iter()),
+                &[vec![], vec![Color::Blue, Color::Green], vec![Color::Green]],
+            )
+        );
     }
 }

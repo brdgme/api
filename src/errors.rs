@@ -34,22 +34,26 @@ impl<'r> Responder<'r> for Error {
     fn respond_to(self, _: &Request) -> response::Result<'r> {
         match self {
             Error(ErrorKind::UserError(ref message), _) => {
-                Ok(Response::build()
-                       .status(Status::BadRequest)
-                       .header(ContentType::Plain)
-                       .header(AccessControlAllowOrigin::Any)
-                       .header(AccessControlAllowMethods(vec![Method::Get,
-                                                              Method::Post,
-                                                              Method::Put,
-                                                              Method::Delete,
-                                                              Method::Options]))
-                       .header(AccessControlAllowHeaders(vec![UniCase("Authorization"
-                                                                          .to_string()),
-                                                              UniCase("Content-Type"
-                                                                          .to_string())]))
-                       .header(AccessControlAllowCredentials)
-                       .sized_body(Cursor::new(message.to_owned()))
-                       .finalize())
+                Ok(
+                    Response::build()
+                        .status(Status::BadRequest)
+                        .header(ContentType::Plain)
+                        .header(AccessControlAllowOrigin::Any)
+                        .header(AccessControlAllowMethods(vec![
+                            Method::Get,
+                            Method::Post,
+                            Method::Put,
+                            Method::Delete,
+                            Method::Options,
+                        ]))
+                        .header(AccessControlAllowHeaders(vec![
+                            UniCase("Authorization".to_string()),
+                            UniCase("Content-Type".to_string()),
+                        ]))
+                        .header(AccessControlAllowCredentials)
+                        .sized_body(Cursor::new(message.to_owned()))
+                        .finalize(),
+                )
             }
             _ => {
                 error!("error: {}", self);

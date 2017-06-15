@@ -36,11 +36,14 @@ impl GameUpdater {
         loop {
             match self.rx.recv() {
                 Ok(opts) => {
-                    if let Err(e) = game_update(&opts.game,
-                                                &opts.game_logs,
-                                                &opts.public_render,
-                                                &opts.player_renders,
-                                                &opts.user_auth_tokens) {
+                    if let Err(e) = game_update(
+                        &opts.game,
+                        &opts.game_logs,
+                        &opts.public_render,
+                        &opts.player_renders,
+                        &opts.user_auth_tokens,
+                    )
+                    {
                         warn!("error sending game update: {}", e);
                     }
                 }
@@ -59,49 +62,47 @@ pub struct GameUpdateOpts {
     pub user_auth_tokens: Vec<UserAuthToken>,
 }
 
-fn created_logs_for_player(player_id: Option<Uuid>,
-                           logs: &[CreatedGameLog],
-                           players: &[markup::Player])
-                           -> Result<Vec<RenderedGameLog>> {
+fn created_logs_for_player(
+    player_id: Option<Uuid>,
+    logs: &[CreatedGameLog],
+    players: &[markup::Player],
+) -> Result<Vec<RenderedGameLog>> {
     logs.iter()
         .filter(|gl| {
-                    gl.game_log.is_public ||
-                    player_id
-                        .and_then(|p_id| gl.targets.iter().find(|t| t.game_player_id == p_id))
-                        .is_some()
-                })
+            gl.game_log.is_public ||
+                player_id
+                    .and_then(|p_id| gl.targets.iter().find(|t| t.game_player_id == p_id))
+                    .is_some()
+        })
         .map(|gl| Ok(gl.game_log.to_owned().into_rendered(players)?))
         .collect()
 }
 
-pub fn game_update<'a>(game: &'a PublicGameExtended,
-                       game_logs: &[CreatedGameLog],
-                       public_render: &cli::Render,
-                       player_renders: &[cli::Render],
-                       user_auth_tokens: &[UserAuthToken])
-                       -> Result<()> {
-    let conn = CLIENT
-        .get_connection()
-        .chain_err(|| "unable to get Redis connection from client")?;
+pub fn game_update<'a>(
+    game: &'a PublicGameExtended,
+    game_logs: &[CreatedGameLog],
+    public_render: &cli::Render,
+    player_renders: &[cli::Render],
+    user_auth_tokens: &[UserAuthToken],
+) -> Result<()> {
+    let conn = CLIENT.get_connection().chain_err(
+        || "unable to get Redis connection from client",
+    )?;
     let markup_players = render::public_game_players_to_markup_players(&game.game_players)?;
     let mut pipe = redis::pipe();
     pipe.cmd("PUBLISH")
         .arg(format!("game.{}", game.game.id))
         .arg(&serde_json::to_string(&ShowResponse {
-                                       game_player: None,
-                                       game: game.game.to_owned(),
-                                       game_type: game.game_type.to_owned(),
-                                       game_version: game.game_version.to_owned(),
-                                       game_players: game.game_players.to_owned(),
-                                       game_logs: created_logs_for_player(None,
-                                                                          game_logs,
-                                                                          &markup_players)?,
-                                       pub_state: public_render.pub_state.to_owned(),
-                                       html: render::markup_html(&public_render.render,
-                                                                 &markup_players)?,
-                                       command_spec: None,
-                                   })
-                     .chain_err(|| "unable to convert game to JSON")?)
+            game_player: None,
+            game: game.game.to_owned(),
+            game_type: game.game_type.to_owned(),
+            game_version: game.game_version.to_owned(),
+            game_players: game.game_players.to_owned(),
+            game_logs: created_logs_for_player(None, game_logs, &markup_players)?,
+            pub_state: public_render.pub_state.to_owned(),
+            html: render::markup_html(&public_render.render, &markup_players)?,
+            command_spec: None,
+        }).chain_err(|| "unable to convert game to JSON")?)
         .ignore();
     for gp in &game.game_players {
         let player_render = match player_renders.get(gp.game_player.position as usize) {
@@ -114,9 +115,11 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
             game_type: game.game_type.to_owned(),
             game_version: game.game_version.to_owned(),
             game_players: game.game_players.to_owned(),
-            game_logs: created_logs_for_player(Some(gp.game_player.id),
-                                               game_logs,
-                                               &markup_players)?,
+            game_logs: created_logs_for_player(
+                Some(gp.game_player.id),
+                game_logs,
+                &markup_players,
+            )?,
             pub_state: player_render.pub_state.to_owned(),
             html: render::markup_html(&player_render.render, &markup_players)?,
             command_spec: player_render.command_spec.to_owned(),
@@ -125,12 +128,14 @@ pub fn game_update<'a>(game: &'a PublicGameExtended,
             if uat.user_id == gp.user.id {
                 pipe.cmd("PUBLISH")
                     .arg(format!("user.{}", uat.id))
-                    .arg(&serde_json::to_string(&player_message)
-                              .chain_err(|| "unable to convert game to JSON")?)
+                    .arg(&serde_json::to_string(&player_message).chain_err(
+                        || "unable to convert game to JSON",
+                    )?)
                     .ignore();
             }
         }
     }
-    pipe.query(&conn)
-        .chain_err(|| "error publishing game updates")
+    pipe.query(&conn).chain_err(
+        || "error publishing game updates",
+    )
 }
