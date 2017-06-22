@@ -3,7 +3,7 @@ use rocket_contrib::JSON;
 use uuid::Uuid;
 use diesel::Connection;
 use diesel::pg::PgConnection;
-use chrono::UTC;
+use chrono::Utc;
 
 use brdgme_cmd::cli;
 use brdgme_game::{Status, Stat};
@@ -41,10 +41,9 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
             let opponent_ids = data.opponent_ids.unwrap_or_else(|| vec![]);
             let opponent_emails = data.opponent_emails.unwrap_or_else(|| vec![]);
             let player_count: usize = 1 + opponent_ids.len() + opponent_emails.len();
-            let game_version =
-                query::find_game_version(&data.game_version_id, conn)
-                    .chain_err(|| "error finding game version")?
-                    .ok_or_else::<Error, _>(|| "could not find game version".into())?;
+            let game_version = query::find_game_version(&data.game_version_id, conn)
+                .chain_err(|| "error finding game version")?
+                .ok_or_else::<Error, _>(|| "could not find game version".into())?;
 
             let resp = game_client::request(
                 &game_version.uri,
@@ -102,9 +101,7 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
     Ok(CORS(JSON(game_extended_to_show_response(
         player,
         &game_extended,
-        player.and_then(
-            |p| player_renders.get(p.position as usize),
-        ),
+        player.and_then(|p| player_renders.get(p.position as usize)),
         conn,
     )?)))
 }
@@ -199,9 +196,8 @@ fn game_extended_to_show_response(
         }
     };
 
-    let (nodes, _) = markup::from_string(&render.render).chain_err(
-        || "error parsing render markup",
-    )?;
+    let (nodes, _) = markup::from_string(&render.render)
+        .chain_err(|| "error parsing render markup")?;
 
     let markup_players = render::game_players_to_markup_players(&game_extended.game_players)?;
     let game_logs = match game_player {
@@ -312,9 +308,8 @@ pub fn command(
 
         let created_logs = query::create_game_logs_from_cli(&id, logs, conn)
             .chain_err(|| "unable to create game logs")?;
-        let game_extended = query::find_game_extended(&id, conn).chain_err(
-            || "unable to get extended game",
-        )?;
+        let game_extended = query::find_game_extended(&id, conn)
+            .chain_err(|| "unable to get extended game")?;
         let user_ids: Vec<Uuid> = game_extended
             .game_players
             .iter()
@@ -375,22 +370,24 @@ pub fn undo(
                 ErrorKind::UserError("you aren't a player in this game".to_string()).into()
             })?;
 
-        let undo_state = player.undo_game_state.clone().ok_or_else::<Error, _>(|| {
-            ErrorKind::UserError("you can't undo at the moment".to_string()).into()
-        })?;
+        let undo_state = player
+            .undo_game_state
+            .clone()
+            .ok_or_else::<Error, _>(|| {
+                ErrorKind::UserError("you can't undo at the moment".to_string()).into()
+            })?;
 
-        let (game_response, public_render, player_renders) =
-            match game_client::request(
-                &game_version.uri,
-                &cli::Request::Status { game: undo_state.clone() },
-            )? {
-                cli::Response::Status {
-                    game,
-                    public_render,
-                    player_renders,
-                } => (game, public_render, player_renders),
-                _ => bail!("invalid response type"),
-            };
+        let (game_response, public_render, player_renders) = match game_client::request(
+            &game_version.uri,
+            &cli::Request::Status { game: undo_state.clone() },
+        )? {
+            cli::Response::Status {
+                game,
+                public_render,
+                player_renders,
+            } => (game, public_render, player_renders),
+            _ => bail!("invalid response type"),
+        };
         let status = game_status_values(&game_response.status);
         let updated = query::update_game_command_success(
             &id,
@@ -417,14 +414,13 @@ pub fn undo(
                     ],
                 ),
                 is_public: true,
-                logged_at: UTC::now().naive_utc(),
+                logged_at: Utc::now().naive_utc(),
             },
             &[],
             conn,
         ).chain_err(|| "unable to create undo game log")?;
-        let game_extended = query::find_game_extended(&id, conn).chain_err(
-            || "unable to get extended game",
-        )?;
+        let game_extended = query::find_game_extended(&id, conn)
+            .chain_err(|| "unable to get extended game")?;
         let user_ids: Vec<Uuid> = game_extended
             .game_players
             .iter()

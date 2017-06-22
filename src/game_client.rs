@@ -8,24 +8,21 @@ use brdgme_cmd::cli;
 use errors::*;
 
 pub fn request(uri: &str, request: &cli::Request) -> Result<cli::Response> {
-    let ssl = NativeTlsClient::new().chain_err(
-        || "unable to get native TLS client",
-    )?;
+    let ssl = NativeTlsClient::new()
+        .chain_err(|| "unable to get native TLS client")?;
     let connector = HttpsConnector::new(ssl);
     let https = HttpClient::with_connector(connector);
     let res = https
         .post(uri)
-        .body(&serde_json::to_string(request).chain_err(
-            || "error converting request to JSON",
-        )?)
+        .body(&serde_json::to_string(request)
+            .chain_err(|| "error converting request to JSON")?)
         .send()
         .chain_err(|| "error getting new game state")?;
     if res.status != hyper::Ok {
         bail!("game request failed");
     }
-    match serde_json::from_reader::<_, cli::Response>(res).chain_err(
-        || "error parsing JSON response",
-    )? {
+    match serde_json::from_reader::<_, cli::Response>(res)
+        .chain_err(|| "error parsing JSON response")? {
         cli::Response::UserError { message } => Err(ErrorKind::UserError(message).into()),
         cli::Response::SystemError { message } => Err(message.into()),
         default => Ok(default),

@@ -7,9 +7,6 @@ use db::schema::*;
 use errors::*;
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
-#[has_many(user_emails)]
-#[has_many(game_players)]
-#[has_many(user_auth_tokens)]
 pub struct User {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -85,8 +82,6 @@ pub struct NewUserAuthToken {
 }
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
-#[has_many(game_versions)]
-#[has_many(game_type_users)]
 pub struct GameType {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -108,7 +103,6 @@ pub struct NewGameType<'a> {
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
 #[belongs_to(GameType)]
-#[has_many(games)]
 pub struct GameVersion {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -178,8 +172,6 @@ pub struct PublicGameVersionType {
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[belongs_to(GameVersion)]
-#[has_many(game_players)]
-#[has_many(game_logs)]
 pub struct Game {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -222,7 +214,6 @@ pub struct NewGame<'a> {
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
 #[belongs_to(Game)]
 #[belongs_to(User)]
-#[has_many(game_log_targets)]
 pub struct GamePlayer {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -329,7 +320,6 @@ pub struct PublicGamePlayerTypeUser {
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
 #[belongs_to(Game)]
-#[has_many(game_log_targets)]
 pub struct GameLog {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
@@ -350,9 +340,8 @@ pub struct RenderedGameLog {
 
 impl GameLog {
     fn render(&self, players: &[markup::Player]) -> Result<String> {
-        let (parsed, _) = markup::from_string(&self.body).chain_err(
-            || "error parsing log body",
-        )?;
+        let (parsed, _) = markup::from_string(&self.body)
+            .chain_err(|| "error parsing log body")?;
         Ok(markup::html(&markup::transform(&parsed, players)))
     }
 
