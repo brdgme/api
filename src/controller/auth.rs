@@ -23,8 +23,9 @@ pub struct CreateForm {
 pub fn create(data: JSON<CreateForm>) -> Result<CORS<()>> {
     let create_email = data.into_inner().email;
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
-    let confirmation = query::user_login_request(&create_email, conn)
-        .chain_err(|| "unable to request user login")?;
+    let confirmation = query::user_login_request(&create_email, conn).chain_err(
+        || "unable to request user login",
+    )?;
 
     mail::send(
         EmailBuilder::new()

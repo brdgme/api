@@ -158,19 +158,19 @@ pub fn authenticate(search_token: &Uuid, conn: &PgConnection) -> Result<Option<U
 
     let uat: UserAuthToken = match user_auth_tokens::table
         .find(search_token)
-        .filter(
-            user_auth_tokens::created_at.gt(Utc::now().naive_utc() - *TOKEN_EXPIRY),
-        )
+        .filter(user_auth_tokens::created_at.gt(
+            Utc::now().naive_utc() -
+                *TOKEN_EXPIRY,
+        ))
         .first(conn)
         .optional()? {
         Some(v) => v,
         None => return Ok(None),
     };
 
-    Ok(Some(users::table
-        .find(uat.user_id)
-        .first(conn)
-        .chain_err(|| "error finding user")?))
+    Ok(Some(users::table.find(uat.user_id).first(conn).chain_err(
+        || "error finding user",
+    )?))
 }
 
 pub fn find_valid_user_auth_tokens_for_users(
@@ -181,9 +181,10 @@ pub fn find_valid_user_auth_tokens_for_users(
 
     user_auth_tokens::table
         .filter(user_auth_tokens::user_id.eq_any(user_ids))
-        .filter(
-            user_auth_tokens::created_at.gt(Utc::now().naive_utc() - *TOKEN_EXPIRY),
-        )
+        .filter(user_auth_tokens::created_at.gt(
+            Utc::now().naive_utc() -
+                *TOKEN_EXPIRY,
+        ))
         .get_results(conn)
         .chain_err(|| "error finding user auth tokens for user")
 }
@@ -191,10 +192,9 @@ pub fn find_valid_user_auth_tokens_for_users(
 pub fn find_game(id: &Uuid, conn: &PgConnection) -> Result<Game> {
     use db::schema::games;
 
-    games::table
-        .find(id)
-        .first(conn)
-        .chain_err(|| "error finding game")
+    games::table.find(id).first(conn).chain_err(
+        || "error finding game",
+    )
 }
 
 pub fn find_game_version(id: &Uuid, conn: &PgConnection) -> Result<Option<GameVersion>> {
@@ -355,8 +355,9 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
         let player_colors = color::choose(&HashSet::from_iter(color::COLORS.iter()), &color_prefs);
 
         // Create game record.
-        let game = create_game(opts.new_game, conn)
-            .chain_err(|| "could not create new game")?;
+        let game = create_game(opts.new_game, conn).chain_err(
+            || "could not create new game",
+        )?;
 
         // Find or create game type user records.
         let game_version = find_game_version(&opts.new_game.game_version_id, conn)?
@@ -450,11 +451,9 @@ pub fn player_can_undo_set_undo_game_state(
 ) -> Result<()> {
     use db::schema::game_players;
     conn.transaction(|| {
-        diesel::update(
-            game_players::table
-                .find(game_player_id)
-                .filter(game_players::undo_game_state.is_null()),
-        ).set(game_players::undo_game_state.eq(game_state))
+        diesel::update(game_players::table.find(game_player_id).filter(
+            game_players::undo_game_state.is_null(),
+        )).set(game_players::undo_game_state.eq(game_state))
             .execute(conn)
             .chain_err(
                 || "error updating game player undo_game_state to game_state",
@@ -475,9 +474,9 @@ pub fn player_cannot_undo_set_undo_game_state(
     conn: &PgConnection,
 ) -> Result<Vec<GamePlayer>> {
     use db::schema::game_players;
-    diesel::update(
-        game_players::table.filter(game_players::game_id.eq(game_id)),
-    ).set(game_players::undo_game_state.eq(None::<String>))
+    diesel::update(game_players::table.filter(
+        game_players::game_id.eq(game_id),
+    )).set(game_players::undo_game_state.eq(None::<String>))
         .get_results(conn)
         .chain_err(|| "error updating game players undo_game_state to None")
 }
@@ -543,9 +542,11 @@ pub fn update_game_whose_turn(
     use db::schema::game_players;
 
     diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
-        .set(
-            game_players::is_turn.eq(game_players::position.eq_any(to_i32_vec(positions))),
-        )
+        .set(game_players::is_turn.eq(game_players::position.eq_any(
+            to_i32_vec(
+                positions,
+            ),
+        )))
         .get_results(conn)
         .chain_err(|| "error updating game players")
 }
@@ -558,9 +559,11 @@ pub fn update_game_eliminated(
     use db::schema::game_players;
 
     diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
-        .set(
-            game_players::is_eliminated.eq(game_players::position.eq_any(to_i32_vec(positions))),
-        )
+        .set(game_players::is_eliminated.eq(
+            game_players::position.eq_any(
+                to_i32_vec(positions),
+            ),
+        ))
         .get_results(conn)
         .chain_err(|| "error updating game players")
 }
@@ -573,9 +576,11 @@ pub fn update_game_winners(
     use db::schema::game_players;
 
     diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
-        .set(
-            game_players::is_winner.eq(game_players::position.eq_any(to_i32_vec(positions))),
-        )
+        .set(game_players::is_winner.eq(game_players::position.eq_any(
+            to_i32_vec(
+                positions,
+            ),
+        )))
         .get_results(conn)
         .chain_err(|| "error updating game players")
 }
@@ -894,11 +899,9 @@ pub fn find_game_logs_for_player(
         game_logs::table
             .left_outer_join(game_log_targets::table)
             .filter(game_logs::game_id.eq(game_player.game_id))
-            .filter(
-                game_logs::is_public
-                    .eq(true)
-                    .or(game_log_targets::game_player_id.eq(game_player_id)),
-            )
+            .filter(game_logs::is_public.eq(true).or(
+                game_log_targets::game_player_id.eq(game_player_id),
+            ))
             .order(game_logs::logged_at)
             .get_results::<(GameLog, Option<GameLogTarget>)>(conn)
             .chain_err(|| "error finding game logs")?

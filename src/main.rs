@@ -21,7 +21,7 @@ extern crate log;
 extern crate env_logger;
 extern crate uuid;
 extern crate hyper;
-extern crate hyper_native_tls;
+extern crate hyper_rustls;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;

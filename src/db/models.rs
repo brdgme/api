@@ -340,8 +340,9 @@ pub struct RenderedGameLog {
 
 impl GameLog {
     fn render(&self, players: &[markup::Player]) -> Result<String> {
-        let (parsed, _) = markup::from_string(&self.body)
-            .chain_err(|| "error parsing log body")?;
+        let (parsed, _) = markup::from_string(&self.body).chain_err(
+            || "error parsing log body",
+        )?;
         Ok(markup::html(&markup::transform(&parsed, players)))
     }
 
