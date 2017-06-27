@@ -189,6 +189,7 @@ pub struct PublicGame {
     pub updated_at: NaiveDateTime,
     pub game_version_id: Uuid,
     pub is_finished: bool,
+    pub finished_at: Option<NaiveDateTime>,
 }
 
 impl Game {
@@ -199,6 +200,7 @@ impl Game {
             updated_at: self.updated_at,
             game_version_id: self.game_version_id,
             is_finished: self.is_finished,
+            finished_at: self.finished_at,
         }
     }
 }
@@ -340,9 +342,8 @@ pub struct RenderedGameLog {
 
 impl GameLog {
     fn render(&self, players: &[markup::Player]) -> Result<String> {
-        let (parsed, _) = markup::from_string(&self.body).chain_err(
-            || "error parsing log body",
-        )?;
+        let (parsed, _) = markup::from_string(&self.body)
+            .chain_err(|| "error parsing log body")?;
         Ok(markup::html(&markup::transform(&parsed, players)))
     }
 

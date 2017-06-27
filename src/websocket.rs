@@ -42,8 +42,7 @@ impl GameUpdater {
                         &opts.public_render,
                         &opts.player_renders,
                         &opts.user_auth_tokens,
-                    )
-                    {
+                    ) {
                         warn!("error sending game update: {}", e);
                     }
                 }
@@ -85,9 +84,9 @@ pub fn game_update<'a>(
     player_renders: &[cli::Render],
     user_auth_tokens: &[UserAuthToken],
 ) -> Result<()> {
-    let conn = CLIENT.get_connection().chain_err(
-        || "unable to get Redis connection from client",
-    )?;
+    let conn = CLIENT
+        .get_connection()
+        .chain_err(|| "unable to get Redis connection from client")?;
     let markup_players = render::public_game_players_to_markup_players(&game.game_players)?;
     let mut pipe = redis::pipe();
     pipe.cmd("PUBLISH")
@@ -128,14 +127,12 @@ pub fn game_update<'a>(
             if uat.user_id == gp.user.id {
                 pipe.cmd("PUBLISH")
                     .arg(format!("user.{}", uat.id))
-                    .arg(&serde_json::to_string(&player_message).chain_err(
-                        || "unable to convert game to JSON",
-                    )?)
+                    .arg(&serde_json::to_string(&player_message)
+                        .chain_err(|| "unable to convert game to JSON")?)
                     .ignore();
             }
         }
     }
-    pipe.query(&conn).chain_err(
-        || "error publishing game updates",
-    )
+    pipe.query(&conn)
+        .chain_err(|| "error publishing game updates")
 }

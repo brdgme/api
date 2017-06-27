@@ -60,18 +60,15 @@ fn main() {
         .mount(
             "/game",
             routes![
-            controller::game::create,
-            controller::game::show,
-            controller::game::command,
-            controller::game::undo,
-        ],
+                controller::game::create,
+                controller::game::show,
+                controller::game::command,
+                controller::game::undo,
+            ],
         )
         .mount(
             "/auth",
-            routes![
-            controller::auth::create,
-            controller::auth::confirm,
-        ],
+            routes![controller::auth::create, controller::auth::confirm,],
         )
         .mount("/mail", routes![controller::mail::index])
         .mount("/", routes![controller::options, controller::init])
