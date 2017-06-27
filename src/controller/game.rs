@@ -307,6 +307,7 @@ pub fn command(
             &status.whose_turn,
             &status.eliminated,
             &status.winners,
+            &game_response.points,
             conn,
         ).chain_err(|| "error updating game")?;
 
@@ -403,6 +404,7 @@ pub fn undo(
             &status.whose_turn,
             &status.eliminated,
             &status.winners,
+            &game_response.points,
             conn,
         ).chain_err(|| "error updating game")?;
         query::player_cannot_undo_set_undo_game_state(&id, conn)

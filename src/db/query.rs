@@ -495,6 +495,7 @@ pub fn update_game_command_success(
     whose_turn: &[usize],
     eliminated: &[usize],
     winners: &[usize],
+    points: &[f32],
     conn: &PgConnection,
 ) -> Result<UpdatedGame> {
     conn.transaction(|| {
@@ -503,6 +504,7 @@ pub fn update_game_command_success(
         } else {
             player_cannot_undo_set_undo_game_state(game_id, conn)?;
         }
+        update_game_points(game_id, points, conn)?;
         let result = UpdatedGame {
             game: update_game(game_id, update, conn)?,
             whose_turn: update_game_whose_turn(game_id, whose_turn, conn)?,
@@ -549,6 +551,40 @@ pub fn update_game_whose_turn(
         )))
         .get_results(conn)
         .chain_err(|| "error updating game players")
+}
+
+pub fn update_game_points(
+    id: &Uuid,
+    points: &[f32],
+    conn: &PgConnection,
+) -> Result<Vec<GamePlayer>> {
+    Ok(
+        points
+            .iter()
+            .enumerate()
+            .filter_map(|(pos, pts)| {
+                update_game_points_for_position(id, pos as i32, *pts, conn).unwrap()
+            })
+            .collect(),
+    )
+}
+
+pub fn update_game_points_for_position(
+    id: &Uuid,
+    position: i32,
+    points: f32,
+    conn: &PgConnection,
+) -> Result<Option<GamePlayer>> {
+    use db::schema::game_players;
+
+    diesel::update(
+        game_players::table
+            .filter(game_players::game_id.eq(id))
+            .filter(game_players::position.eq(position)),
+    ).set(game_players::points.eq(points))
+        .get_result(conn)
+        .optional()
+        .chain_err(|| "error updating game player points")
 }
 
 pub fn update_game_eliminated(
