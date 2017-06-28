@@ -488,11 +488,13 @@ pub struct UpdatedGame {
     pub whose_turn: Vec<GamePlayer>,
     pub eliminated: Vec<GamePlayer>,
     pub winners: Vec<GamePlayer>,
+    pub is_read: Vec<GamePlayer>,
 }
 pub fn update_game_command_success(
     game_id: &Uuid,
+    game_player_id: &Uuid,
     update: &NewGame,
-    undo_game_state: Option<(&Uuid, &str)>,
+    undo_game_state: Option<&str>,
     whose_turn: &[usize],
     eliminated: &[usize],
     winners: &[usize],
@@ -500,7 +502,7 @@ pub fn update_game_command_success(
     conn: &PgConnection,
 ) -> Result<UpdatedGame> {
     conn.transaction(|| {
-        if let Some((game_player_id, game_state)) = undo_game_state {
+        if let Some(game_state) = undo_game_state {
             player_can_undo_set_undo_game_state(game_id, game_player_id, game_state, conn)?;
         } else {
             player_cannot_undo_set_undo_game_state(game_id, conn)?;
@@ -511,6 +513,7 @@ pub fn update_game_command_success(
             whose_turn: update_game_whose_turn(game_id, whose_turn, conn)?,
             eliminated: update_game_eliminated(game_id, eliminated, conn)?,
             winners: update_game_winners(game_id, winners, conn)?,
+            is_read: update_game_is_read(game_id, &[*game_player_id], conn)?,
         };
         Ok(result)
     })
@@ -627,6 +630,21 @@ pub fn update_game_winners(
     diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
         .set(
             game_players::is_winner.eq(game_players::position.eq_any(to_i32_vec(positions))),
+        )
+        .get_results(conn)
+        .chain_err(|| "error updating game players")
+}
+
+pub fn update_game_is_read(
+    id: &Uuid,
+    game_player_ids: &[Uuid],
+    conn: &PgConnection,
+) -> Result<Vec<GamePlayer>> {
+    use db::schema::game_players;
+
+    diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
+        .set(
+            game_players::is_read.eq(game_players::id.eq_any(game_player_ids)),
         )
         .get_results(conn)
         .chain_err(|| "error updating game players")

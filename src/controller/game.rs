@@ -235,7 +235,6 @@ pub fn command(
 ) -> Result<CORS<JSON<ShowResponse>>> {
     let id = id.into_uuid();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
-
     conn.transaction::<_, Error, _>(|| {
 
         let (game, game_version) = query::find_game_with_version(&id, conn)
@@ -290,13 +289,14 @@ pub fn command(
 
         let updated = query::update_game_command_success(
             &id,
+            &player.id,
             &models::NewGame {
                 game_version_id: game.game_version_id,
                 is_finished: status.is_finished,
                 game_state: &game_response.state,
             },
             if can_undo {
-                Some((&player.id, &game.game_state))
+                Some(&game.game_state)
             } else {
                 None
             },
@@ -392,6 +392,7 @@ pub fn undo(
         let status = game_status_values(&game_response.status);
         let updated = query::update_game_command_success(
             &id,
+            &player.id,
             &models::NewGame {
                 game_version_id: game.game_version_id,
                 is_finished: status.is_finished,
