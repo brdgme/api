@@ -11,4 +11,4 @@ BEFORE UPDATE
 ON games
 FOR EACH ROW
 WHEN (OLD.is_finished = FALSE AND NEW.is_finished = TRUE)
-EXECUTE PROCEDURE update_is_turn_at();
+EXECUTE PROCEDURE update_finished_at();
