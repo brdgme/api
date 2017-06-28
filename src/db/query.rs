@@ -528,7 +528,7 @@ pub fn concede_game(
             .chain_err(|| "unable to find game players for concede")?;
         let winners: Vec<usize> = game_players
             .into_iter()
-            .filter_map(|gp| if gp.user_id != *game_player_id {
+            .filter_map(|gp| if gp.id != *game_player_id {
                 Some(gp.position as usize)
             } else {
                 None
