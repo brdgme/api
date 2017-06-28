@@ -79,7 +79,7 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
             let created_logs = query::create_game_logs_from_cli(&created_game.game.id, logs, conn)
                 .chain_err(|| "unable to create game logs")?;
             let mut user_ids = opponent_ids.clone();
-            user_ids.push(user_id.clone());
+            user_ids.push(user_id);
             Ok((
                 created_game,
                 created_logs,
@@ -457,5 +457,22 @@ pub fn undo(
             gp.and_then(|gp| player_renders.get(gp.position as usize)),
             conn,
         )?)))
+    })
+}
+
+#[post("/<id>/mark_read")]
+pub fn mark_read(
+    id: UuidParam,
+    user: models::User,
+) -> Result<CORS<JSON<Option<models::PublicGamePlayer>>>> {
+    let id = id.into_uuid();
+    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+
+    conn.transaction::<_, Error, _>(|| {
+        Ok(CORS(JSON(
+            query::mark_game_read(&id, &user.id, conn)
+                .chain_err(|| "error marking game read")?
+                .map(|gp| gp.into_public()),
+        )))
     })
 }

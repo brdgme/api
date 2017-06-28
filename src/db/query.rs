@@ -537,6 +537,22 @@ pub fn update_game(
         .chain_err(|| "error updating game")
 }
 
+pub fn mark_game_read(
+    id: &Uuid,
+    user_id: &Uuid,
+    conn: &PgConnection,
+) -> Result<Option<GamePlayer>> {
+    use db::schema::game_players;
+    diesel::update(
+        game_players::table
+            .filter(game_players::game_id.eq(id))
+            .filter(game_players::user_id.eq(user_id)),
+    ).set((game_players::is_read.eq(true),))
+        .get_result(conn)
+        .optional()
+        .chain_err(|| "error marking game as read")
+}
+
 pub fn update_game_whose_turn(
     id: &Uuid,
     positions: &[usize],
