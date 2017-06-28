@@ -242,6 +242,10 @@ pub fn command(
             .ok_or_else::<Error, _>(|| {
                 ErrorKind::UserError("game does not exist".to_string()).into()
             })?;
+        if game.is_finished {
+            bail!(ErrorKind::UserError("game is already finished".to_string()));
+        }
+
         let players: Vec<(models::GamePlayer, models::User)> =
             query::find_game_players_with_user_by_game(&id, conn)
                 .chain_err(|| "error finding game players")?;
@@ -364,6 +368,9 @@ pub fn undo(
             .ok_or_else::<Error, _>(|| {
                 ErrorKind::UserError("game does not exist".to_string()).into()
             })?;
+        if game.is_finished {
+            bail!(ErrorKind::UserError("game is already finished".to_string()));
+        }
 
         let player = query::find_game_player_by_user_and_game(&user.id, &id, conn)
             .chain_err(|| "error finding game player")?
@@ -475,5 +482,106 @@ pub fn mark_read(
                 .chain_err(|| "error marking game read")?
                 .map(|gp| gp.into_public()),
         )))
+    })
+}
+
+#[post("/<id>/concede")]
+pub fn concede(
+    id: UuidParam,
+    user: models::User,
+    game_update_tx: State<Mutex<Sender<websocket::GameUpdateOpts>>>,
+) -> Result<CORS<JSON<ShowResponse>>> {
+    let id = id.into_uuid();
+    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+
+    conn.transaction::<_, Error, _>(|| {
+        let (game, game_version) = query::find_game_with_version(&id, conn)
+            .chain_err(|| "error finding game")?
+            .ok_or_else::<Error, _>(|| {
+                ErrorKind::UserError("game does not exist".to_string()).into()
+            })?;
+        if game.is_finished {
+            bail!(ErrorKind::UserError("game is already finished".to_string()));
+        }
+
+        let player_count = query::find_player_count_by_game(&id, conn)
+            .chain_err(|| "error finding player count for game")?;
+        if player_count > 2 {
+            bail!(ErrorKind::UserError(
+                "cannot concede games with more than two players".to_string()
+            ));
+        }
+
+        let player = query::find_game_player_by_user_and_game(&user.id, &id, conn)
+            .chain_err(|| "error finding game player")?
+            .ok_or_else::<Error, _>(|| {
+                ErrorKind::UserError("you aren't a player in this game".to_string()).into()
+            })?;
+
+        let updated = query::concede_game(&id, &player.id, conn)
+            .chain_err(|| "error conceding game")?;
+
+        let (public_render, player_renders) = match game_client::request(
+            &game_version.uri,
+            &cli::Request::Status { game: game.game_state.clone() },
+        )? {
+            cli::Response::Status {
+                public_render,
+                player_renders,
+                ..
+            } => (public_render, player_renders),
+            _ => bail!("invalid response type"),
+        };
+        let created_log = query::create_game_log(
+            &models::NewGameLog {
+                game_id: id,
+                body: &markup::to_string(
+                    &[
+                        markup::Node::Player(player.position as usize),
+                        markup::Node::text(" conceded"),
+                    ],
+                ),
+                is_public: true,
+                logged_at: Utc::now().naive_utc(),
+            },
+            &[],
+            conn,
+        ).chain_err(|| "unable to create concede game log")?;
+        let game_extended = query::find_game_extended(&id, conn)
+            .chain_err(|| "unable to get extended game")?;
+        let user_ids: Vec<Uuid> = game_extended
+            .game_players
+            .iter()
+            .map(|gptu| gptu.user.id)
+            .collect();
+        let tx = {
+            game_update_tx
+                .inner()
+                .lock()
+                .map_err::<Error, _>(|_| {
+                    ErrorKind::Msg("unable to get lock on game_update_tx".to_string()).into()
+                })?
+                .clone()
+        };
+        tx.send(websocket::GameUpdateOpts {
+            game: game_extended.clone().into_public(),
+            game_logs: vec![created_log],
+            public_render: public_render.clone(),
+            player_renders: player_renders.clone(),
+            user_auth_tokens: query::find_valid_user_auth_tokens_for_users(&user_ids, conn)?,
+        }).map_err::<Error, _>(|_| {
+                ErrorKind::Msg("unable to send game update options".to_string()).into()
+            })?;
+        let gp = game_extended
+            .game_players
+            .iter()
+            .find(|gptu| gptu.game_player.id == player.id)
+            .map(|gptu| &gptu.game_player);
+        Ok(CORS(JSON(game_extended_to_show_response(
+            gp,
+            &game_extended,
+            gp.and_then(|gp| player_renders.get(gp.position as usize)),
+            conn,
+        )?)))
     })
 }

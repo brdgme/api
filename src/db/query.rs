@@ -508,15 +508,64 @@ pub fn update_game_command_success(
             player_cannot_undo_set_undo_game_state(game_id, conn)?;
         }
         update_game_points(game_id, points, conn)?;
-        let result = UpdatedGame {
+        Ok(UpdatedGame {
             game: update_game(game_id, update, conn)?,
             whose_turn: update_game_whose_turn(game_id, whose_turn, conn)?,
             eliminated: update_game_eliminated(game_id, eliminated, conn)?,
             winners: update_game_winners(game_id, winners, conn)?,
             is_read: update_game_is_read(game_id, &[*game_player_id], conn)?,
-        };
-        Ok(result)
+        })
     })
+}
+
+pub fn concede_game(
+    game_id: &Uuid,
+    game_player_id: &Uuid,
+    conn: &PgConnection,
+) -> Result<UpdatedGame> {
+    conn.transaction(|| {
+        let game_players = find_game_players_by_game(game_id, conn)
+            .chain_err(|| "unable to find game players for concede")?;
+        let winners: Vec<usize> = game_players
+            .into_iter()
+            .filter_map(|gp| if gp.user_id != *game_player_id {
+                Some(gp.position as usize)
+            } else {
+                None
+            })
+            .collect();
+        Ok(UpdatedGame {
+            game: update_game_is_finished(game_id, true, conn)?,
+            whose_turn: update_game_whose_turn(game_id, &[], conn)?,
+            eliminated: vec![],
+            winners: update_game_winners(game_id, &winners, conn)?,
+            is_read: update_game_is_read(game_id, &[*game_player_id], conn)?,
+        })
+    })
+}
+
+pub fn update_game_is_finished(
+    game_id: &Uuid,
+    is_finished: bool,
+    conn: &PgConnection,
+) -> Result<Option<Game>> {
+    use db::schema::games;
+    diesel::update(games::table.find(game_id))
+        .set((games::is_finished.eq(is_finished)))
+        .get_result(conn)
+        .optional()
+        .chain_err(|| "error updating game is_finished")
+}
+
+pub fn find_player_count_by_game(game_id: &Uuid, conn: &PgConnection) -> Result<i64> {
+    use diesel::expression::count;
+    use db::schema::game_players;
+
+    game_players::table
+        .select(count(game_players::id))
+        .filter(game_players::game_id.eq(game_id))
+        .get_result(conn)
+        .chain_err(|| "error getting player count")
 }
 
 fn to_i32_vec(from: &[usize]) -> Vec<i32> {

@@ -65,6 +65,7 @@ fn main() {
                 controller::game::command,
                 controller::game::undo,
                 controller::game::mark_read,
+                controller::game::concede,
             ],
         )
         .mount(
