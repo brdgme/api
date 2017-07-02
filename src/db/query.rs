@@ -527,12 +527,8 @@ pub fn concede_game(
         let game_players = find_game_players_by_game(game_id, conn)
             .chain_err(|| "unable to find game players for concede")?;
         let placings: Vec<usize> = game_players
-            .into_iter()
-            .filter_map(|gp| if gp.id != *game_player_id {
-                Some(gp.position as usize)
-            } else {
-                None
-            })
+            .iter()
+            .map(|gp| if gp.id != *game_player_id { 1 } else { 2 })
             .collect();
         Ok(UpdatedGame {
             game: update_game_is_finished(game_id, true, conn)?,
