@@ -1050,7 +1050,6 @@ pub fn find_game_logs_for_player(
 mod tests {
     use super::*;
     use db::color::Color;
-    use db::models::NewUserEmail;
     use db::CONN;
 
     #[test]
@@ -1071,6 +1070,58 @@ mod tests {
             closure(conn);
             Ok(())
         });
+    }
+
+    fn create_test_game(players: usize, conn: &PgConnection) -> GameExtended {
+        let mut users = vec![];
+        for p in 0..players {
+            users.push(
+                create_user_by_email(&format!("{}", p), conn)
+                    .expect("expected to create user by name")
+                    .1,
+            );
+        }
+        let game_type = create_game_type(
+            &NewGameType {
+                name: "Test Game",
+                player_counts: vec![players as i32],
+                weight: 1.52,
+            },
+            conn,
+        ).expect("expected to create game type");
+        let game_version = create_game_version(
+            &NewGameVersion {
+                game_type_id: game_type.id,
+                uri: "https://example.com/test-game-1",
+                name: "v1",
+                is_public: true,
+                is_deprecated: false,
+            },
+            conn,
+        ).expect("expected to create game version");
+        let created_game = create_game_with_users(
+            &CreateGameOpts {
+                new_game: &NewGame {
+                    game_version_id: game_version.id,
+                    is_finished: false,
+                    game_state: "",
+                },
+                whose_turn: &[0],
+                eliminated: &[],
+                placings: &[],
+                points: &[],
+                creator_id: &users[0].id,
+                opponent_ids: users
+                    .iter()
+                    .skip(1)
+                    .map(|p| p.id)
+                    .collect::<Vec<Uuid>>()
+                    .as_ref(),
+                opponent_emails: &[],
+            },
+            conn,
+        ).expect("expected to create game");
+        find_game_extended(&created_game.game.id, conn).expect("expected to find game")
     }
 
     #[test]
@@ -1331,6 +1382,26 @@ mod tests {
             ).unwrap();
             player_cannot_undo_set_undo_game_state(&game.id, conn)
                 .expect("failed to update player game undo state");
+        });
+    }
+
+    #[test]
+    #[ignore]
+    fn update_game_placings_works() {
+        with_db(|conn| {
+            let game_extended = create_test_game(5, conn);
+            update_game_placings(&game_extended.game.id, &[1, 3, 2, 5, 4], conn)
+                .expect("expected to update game placings");
+            let updated_game_extended = find_game_extended(&game_extended.game.id, conn)
+                .expect("expected to find game again");
+            assert_eq!(
+                vec![Some(1i32), Some(3i32), Some(2i32), Some(5i32), Some(4i32)],
+                updated_game_extended
+                    .game_players
+                    .iter()
+                    .map(|gptu| gptu.game_player.place)
+                    .collect::<Vec<Option<i32>>>()
+            );
         });
     }
 }
