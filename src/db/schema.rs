@@ -80,10 +80,10 @@ table! {
         is_turn_at -> Timestamp,
         last_turn_at -> Timestamp,
         is_eliminated -> Bool,
-        is_winner -> Bool,
         is_read -> Bool,
         points -> Nullable<Float>,
         undo_game_state -> Nullable<Text>,
+        place -> Nullable<Integer>,
     }
 }
 

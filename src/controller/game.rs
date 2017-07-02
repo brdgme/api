@@ -68,7 +68,7 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
                     },
                     whose_turn: &status.whose_turn,
                     eliminated: &status.eliminated,
-                    winners: &status.winners,
+                    placings: &status.placings,
                     points: &game_info.points,
                     creator_id: &user_id,
                     opponent_ids: &opponent_ids,
@@ -110,11 +110,11 @@ struct StatusValues {
     is_finished: bool,
     whose_turn: Vec<usize>,
     eliminated: Vec<usize>,
-    winners: Vec<usize>,
+    placings: Vec<usize>,
     stats: Vec<HashMap<String, Stat>>,
 }
 fn game_status_values(status: &Status) -> StatusValues {
-    let (is_finished, whose_turn, eliminated, winners, stats) = match *status {
+    let (is_finished, whose_turn, eliminated, placings, stats) = match *status {
         Status::Active {
             ref whose_turn,
             ref eliminated,
@@ -126,16 +126,16 @@ fn game_status_values(status: &Status) -> StatusValues {
             vec![],
         ),
         Status::Finished {
-            ref winners,
+            ref placings,
             ref stats,
-        } => (true, vec![], vec![], winners.clone(), stats.clone()),
+        } => (true, vec![], vec![], placings.clone(), stats.clone()),
     };
     StatusValues {
-        is_finished: is_finished,
-        whose_turn: whose_turn,
-        eliminated: eliminated,
-        winners: winners,
-        stats: stats,
+        is_finished,
+        whose_turn,
+        eliminated,
+        placings,
+        stats,
     }
 }
 
@@ -306,7 +306,7 @@ pub fn command(
             },
             &status.whose_turn,
             &status.eliminated,
-            &status.winners,
+            &status.placings,
             &game_response.points,
             conn,
         ).chain_err(|| "error updating game")?;
@@ -408,7 +408,7 @@ pub fn undo(
             None,
             &status.whose_turn,
             &status.eliminated,
-            &status.winners,
+            &status.placings,
             &game_response.points,
             conn,
         ).chain_err(|| "error updating game")?;

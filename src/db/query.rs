@@ -323,7 +323,7 @@ pub struct CreateGameOpts<'a> {
     pub new_game: &'a NewGame<'a>,
     pub whose_turn: &'a [usize],
     pub eliminated: &'a [usize],
-    pub winners: &'a [usize],
+    pub placings: &'a [usize],
     pub points: &'a [f32],
     pub creator_id: &'a Uuid,
     pub opponent_ids: &'a [Uuid],
@@ -384,10 +384,10 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
                     is_turn_at: now,
                     last_turn_at: now,
                     is_eliminated: opts.eliminated.contains(&pos),
-                    is_winner: opts.winners.contains(&pos),
                     is_read: false,
                     points: opts.points.get(pos).cloned(),
                     undo_game_state: None,
+                    place: opts.placings.get(pos).map(|p| *p as i32),
                 },
                 conn,
             ).chain_err(|| "could not create game player")?);
@@ -487,7 +487,7 @@ pub struct UpdatedGame {
     pub game: Option<Game>,
     pub whose_turn: Vec<GamePlayer>,
     pub eliminated: Vec<GamePlayer>,
-    pub winners: Vec<GamePlayer>,
+    pub placings: Vec<GamePlayer>,
     pub is_read: Vec<GamePlayer>,
 }
 pub fn update_game_command_success(
@@ -497,7 +497,7 @@ pub fn update_game_command_success(
     undo_game_state: Option<&str>,
     whose_turn: &[usize],
     eliminated: &[usize],
-    winners: &[usize],
+    placings: &[usize],
     points: &[f32],
     conn: &PgConnection,
 ) -> Result<UpdatedGame> {
@@ -512,7 +512,7 @@ pub fn update_game_command_success(
             game: update_game(game_id, update, conn)?,
             whose_turn: update_game_whose_turn(game_id, whose_turn, conn)?,
             eliminated: update_game_eliminated(game_id, eliminated, conn)?,
-            winners: update_game_winners(game_id, winners, conn)?,
+            placings: update_game_placings(game_id, placings, conn)?,
             is_read: update_game_is_read(game_id, &[*game_player_id], conn)?,
         })
     })
@@ -526,7 +526,7 @@ pub fn concede_game(
     conn.transaction(|| {
         let game_players = find_game_players_by_game(game_id, conn)
             .chain_err(|| "unable to find game players for concede")?;
-        let winners: Vec<usize> = game_players
+        let placings: Vec<usize> = game_players
             .into_iter()
             .filter_map(|gp| if gp.id != *game_player_id {
                 Some(gp.position as usize)
@@ -538,7 +538,7 @@ pub fn concede_game(
             game: update_game_is_finished(game_id, true, conn)?,
             whose_turn: update_game_whose_turn(game_id, &[], conn)?,
             eliminated: vec![],
-            winners: update_game_winners(game_id, &winners, conn)?,
+            placings: update_game_placings(game_id, &placings, conn)?,
             is_read: update_game_is_read(game_id, &[*game_player_id], conn)?,
         })
     })
@@ -669,19 +669,38 @@ pub fn update_game_eliminated(
         .chain_err(|| "error updating game players")
 }
 
-pub fn update_game_winners(
+pub fn update_game_placings(
     id: &Uuid,
-    positions: &[usize],
+    placings: &[usize],
     conn: &PgConnection,
 ) -> Result<Vec<GamePlayer>> {
+    Ok(
+        placings
+            .iter()
+            .enumerate()
+            .filter_map(|(pos, place)| {
+                update_game_placing(id, pos, *place, conn).unwrap()
+            })
+            .collect(),
+    )
+}
+
+pub fn update_game_placing(
+    game_id: &Uuid,
+    position: usize,
+    place: usize,
+    conn: &PgConnection,
+) -> Result<Option<GamePlayer>> {
     use db::schema::game_players;
 
-    diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
-        .set(
-            game_players::is_winner.eq(game_players::position.eq_any(to_i32_vec(positions))),
-        )
-        .get_results(conn)
-        .chain_err(|| "error updating game players")
+    diesel::update(
+        game_players::table
+            .filter(game_players::game_id.eq(game_id))
+            .filter(game_players::position.eq(position as i32)),
+    ).set(game_players::place.eq(place as i32))
+        .get_result(conn)
+        .optional()
+        .chain_err(|| "error updating place for game player")
 }
 
 pub fn update_game_is_read(
@@ -1215,7 +1234,7 @@ mod tests {
                         is_turn_at: Utc::now().naive_utc(),
                         last_turn_at: Utc::now().naive_utc(),
                         is_eliminated: false,
-                        is_winner: false,
+                        place: None,
                         is_read: false,
                         points: None,
                         undo_game_state: None,
@@ -1230,7 +1249,7 @@ mod tests {
                         is_turn_at: Utc::now().naive_utc(),
                         last_turn_at: Utc::now().naive_utc(),
                         is_eliminated: false,
-                        is_winner: false,
+                        place: None,
                         is_read: false,
                         points: Some(1.5),
                         undo_game_state: None,

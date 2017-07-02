@@ -229,10 +229,10 @@ pub struct GamePlayer {
     pub is_turn_at: NaiveDateTime,
     pub last_turn_at: NaiveDateTime,
     pub is_eliminated: bool,
-    pub is_winner: bool,
     pub is_read: bool,
     pub points: Option<f32>,
     pub undo_game_state: Option<String>,
+    pub place: Option<i32>,
 }
 
 impl GamePlayer {
@@ -250,10 +250,10 @@ impl GamePlayer {
             is_turn_at: self.is_turn_at,
             last_turn_at: self.last_turn_at,
             is_eliminated: self.is_eliminated,
-            is_winner: self.is_winner,
             is_read: self.is_read,
             points: self.points,
             can_undo: self.undo_game_state.is_some(),
+            place: self.place,
         }
     }
 }
@@ -272,10 +272,10 @@ pub struct PublicGamePlayer {
     pub is_turn_at: NaiveDateTime,
     pub last_turn_at: NaiveDateTime,
     pub is_eliminated: bool,
-    pub is_winner: bool,
     pub is_read: bool,
     pub points: Option<f32>,
     pub can_undo: bool,
+    pub place: Option<i32>,
 }
 
 #[derive(Insertable)]
@@ -290,10 +290,10 @@ pub struct NewGamePlayer<'a> {
     pub is_turn_at: NaiveDateTime,
     pub last_turn_at: NaiveDateTime,
     pub is_eliminated: bool,
-    pub is_winner: bool,
     pub is_read: bool,
     pub points: Option<f32>,
     pub undo_game_state: Option<String>,
+    pub place: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
