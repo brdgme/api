@@ -5,13 +5,13 @@ services:
 - docker
 - postgresql
 env:
-- DATABASE_URL=postgres://postgres@localhost/brdgme
+- DATABASE_URL=postgres://postgres@localhost/brdgme_test
 script:
 - cargo install diesel_cli
 - diesel database setup
 - cargo build --verbose --all
 - cargo test --verbose
-- cargo test --verbose --ignored
+- cargo test --verbose -- --ignored
 - cargo clean
 - ./build-release
 deploy:
