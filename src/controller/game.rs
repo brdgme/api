@@ -41,9 +41,10 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
             let opponent_ids = data.opponent_ids.unwrap_or_else(|| vec![]);
             let opponent_emails = data.opponent_emails.unwrap_or_else(|| vec![]);
             let player_count: usize = 1 + opponent_ids.len() + opponent_emails.len();
-            let game_version = query::find_game_version(&data.game_version_id, conn)
-                .chain_err(|| "error finding game version")?
-                .ok_or_else::<Error, _>(|| "could not find game version".into())?;
+            let game_version =
+                query::find_game_version(&data.game_version_id, conn)
+                    .chain_err(|| "error finding game version")?
+                    .ok_or_else::<Error, _>(|| "could not find game version".into())?;
 
             let resp = game_client::request(
                 &game_version.uri,
@@ -101,7 +102,9 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
     Ok(CORS(JSON(game_extended_to_show_response(
         player,
         &game_extended,
-        player.and_then(|p| player_renders.get(p.position as usize)),
+        player.and_then(
+            |p| player_renders.get(p.position as usize),
+        ),
         conn,
     )?)))
 }
@@ -196,8 +199,9 @@ fn game_extended_to_show_response(
         }
     };
 
-    let (nodes, _) = markup::from_string(&render.render)
-        .chain_err(|| "error parsing render markup")?;
+    let (nodes, _) = markup::from_string(&render.render).chain_err(
+        || "error parsing render markup",
+    )?;
 
     let markup_players = render::game_players_to_markup_players(&game_extended.game_players)?;
     let game_logs = match game_player {
@@ -313,8 +317,9 @@ pub fn command(
 
         let created_logs = query::create_game_logs_from_cli(&id, logs, conn)
             .chain_err(|| "unable to create game logs")?;
-        let game_extended = query::find_game_extended(&id, conn)
-            .chain_err(|| "unable to get extended game")?;
+        let game_extended = query::find_game_extended(&id, conn).chain_err(
+            || "unable to get extended game",
+        )?;
         let user_ids: Vec<Uuid> = game_extended
             .game_players
             .iter()
@@ -378,24 +383,22 @@ pub fn undo(
                 ErrorKind::UserError("you aren't a player in this game".to_string()).into()
             })?;
 
-        let undo_state = player
-            .undo_game_state
-            .clone()
-            .ok_or_else::<Error, _>(|| {
-                ErrorKind::UserError("you can't undo at the moment".to_string()).into()
-            })?;
+        let undo_state = player.undo_game_state.clone().ok_or_else::<Error, _>(|| {
+            ErrorKind::UserError("you can't undo at the moment".to_string()).into()
+        })?;
 
-        let (game_response, public_render, player_renders) = match game_client::request(
-            &game_version.uri,
-            &cli::Request::Status { game: undo_state.clone() },
-        )? {
-            cli::Response::Status {
-                game,
-                public_render,
-                player_renders,
-            } => (game, public_render, player_renders),
-            _ => bail!("invalid response type"),
-        };
+        let (game_response, public_render, player_renders) =
+            match game_client::request(
+                &game_version.uri,
+                &cli::Request::Status { game: undo_state.clone() },
+            )? {
+                cli::Response::Status {
+                    game,
+                    public_render,
+                    player_renders,
+                } => (game, public_render, player_renders),
+                _ => bail!("invalid response type"),
+            };
         let status = game_status_values(&game_response.status);
         let updated = query::update_game_command_success(
             &id,
@@ -429,8 +432,9 @@ pub fn undo(
             &[],
             conn,
         ).chain_err(|| "unable to create undo game log")?;
-        let game_extended = query::find_game_extended(&id, conn)
-            .chain_err(|| "unable to get extended game")?;
+        let game_extended = query::find_game_extended(&id, conn).chain_err(
+            || "unable to get extended game",
+        )?;
         let user_ids: Vec<Uuid> = game_extended
             .game_players
             .iter()
@@ -504,11 +508,13 @@ pub fn concede(
             bail!(ErrorKind::UserError("game is already finished".to_string()));
         }
 
-        let player_count = query::find_player_count_by_game(&id, conn)
-            .chain_err(|| "error finding player count for game")?;
+        let player_count = query::find_player_count_by_game(&id, conn).chain_err(
+            || "error finding player count for game",
+        )?;
         if player_count > 2 {
             bail!(ErrorKind::UserError(
-                "cannot concede games with more than two players".to_string()
+                "cannot concede games with more than two players"
+                    .to_string(),
             ));
         }
 
@@ -518,20 +524,22 @@ pub fn concede(
                 ErrorKind::UserError("you aren't a player in this game".to_string()).into()
             })?;
 
-        let updated = query::concede_game(&id, &player.id, conn)
-            .chain_err(|| "error conceding game")?;
+        let updated = query::concede_game(&id, &player.id, conn).chain_err(
+            || "error conceding game",
+        )?;
 
-        let (public_render, player_renders) = match game_client::request(
-            &game_version.uri,
-            &cli::Request::Status { game: game.game_state.clone() },
-        )? {
-            cli::Response::Status {
-                public_render,
-                player_renders,
-                ..
-            } => (public_render, player_renders),
-            _ => bail!("invalid response type"),
-        };
+        let (public_render, player_renders) =
+            match game_client::request(
+                &game_version.uri,
+                &cli::Request::Status { game: game.game_state.clone() },
+            )? {
+                cli::Response::Status {
+                    public_render,
+                    player_renders,
+                    ..
+                } => (public_render, player_renders),
+                _ => bail!("invalid response type"),
+            };
         let created_log = query::create_game_log(
             &models::NewGameLog {
                 game_id: id,
@@ -547,8 +555,9 @@ pub fn concede(
             &[],
             conn,
         ).chain_err(|| "unable to create concede game log")?;
-        let game_extended = query::find_game_extended(&id, conn)
-            .chain_err(|| "unable to get extended game")?;
+        let game_extended = query::find_game_extended(&id, conn).chain_err(
+            || "unable to get extended game",
+        )?;
         let user_ids: Vec<Uuid> = game_extended
             .game_players
             .iter()

@@ -164,11 +164,7 @@ fn remove_highest_prefs(prefs: &[LocPref]) -> Option<Vec<LocPref>> {
             (pos, new_pref)
         })
         .collect::<Vec<LocPref>>();
-    if some_remain {
-        Some(new_prefs)
-    } else {
-        None
-    }
+    if some_remain { Some(new_prefs) } else { None }
 }
 
 #[cfg(test)]

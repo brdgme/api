@@ -84,6 +84,7 @@ table! {
         points -> Nullable<Float>,
         undo_game_state -> Nullable<Text>,
         place -> Nullable<Integer>,
+        rating_change -> Nullable<Integer>,
     }
 }
 

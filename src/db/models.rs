@@ -233,6 +233,7 @@ pub struct GamePlayer {
     pub points: Option<f32>,
     pub undo_game_state: Option<String>,
     pub place: Option<i32>,
+    pub rating_change: Option<i32>,
 }
 
 impl GamePlayer {
@@ -254,6 +255,7 @@ impl GamePlayer {
             points: self.points,
             can_undo: self.undo_game_state.is_some(),
             place: self.place,
+            rating_change: self.rating_change,
         }
     }
 }
@@ -276,6 +278,7 @@ pub struct PublicGamePlayer {
     pub points: Option<f32>,
     pub can_undo: bool,
     pub place: Option<i32>,
+    pub rating_change: Option<i32>,
 }
 
 #[derive(Insertable)]
@@ -294,6 +297,7 @@ pub struct NewGamePlayer<'a> {
     pub points: Option<f32>,
     pub undo_game_state: Option<String>,
     pub place: Option<i32>,
+    pub rating_change: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -342,8 +346,9 @@ pub struct RenderedGameLog {
 
 impl GameLog {
     fn render(&self, players: &[markup::Player]) -> Result<String> {
-        let (parsed, _) = markup::from_string(&self.body)
-            .chain_err(|| "error parsing log body")?;
+        let (parsed, _) = markup::from_string(&self.body).chain_err(
+            || "error parsing log body",
+        )?;
         Ok(markup::html(&markup::transform(&parsed, players)))
     }
 

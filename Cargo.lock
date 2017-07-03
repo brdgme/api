@@ -708,7 +708,7 @@ dependencies = [
 [[package]]
 name = "rocket"
 version = "0.3.0-dev"
-source = "git+https://github.com/SergioBenitez/Rocket.git#4d586c5006da3a24fd451d238c9f213047063325"
+source = "git+https://github.com/SergioBenitez/Rocket.git#a6d03b1e2f5b2616931ac68cd40a39bafe803794"
 dependencies = [
  "base64 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cookie 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -732,7 +732,7 @@ dependencies = [
 [[package]]
 name = "rocket_codegen"
 version = "0.3.0-dev"
-source = "git+https://github.com/SergioBenitez/Rocket.git#4d586c5006da3a24fd451d238c9f213047063325"
+source = "git+https://github.com/SergioBenitez/Rocket.git#a6d03b1e2f5b2616931ac68cd40a39bafe803794"
 dependencies = [
  "log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rocket 0.3.0-dev (git+https://github.com/SergioBenitez/Rocket.git)",
@@ -743,7 +743,7 @@ dependencies = [
 [[package]]
 name = "rocket_contrib"
 version = "0.3.0-dev"
-source = "git+https://github.com/SergioBenitez/Rocket.git#4d586c5006da3a24fd451d238c9f213047063325"
+source = "git+https://github.com/SergioBenitez/Rocket.git#a6d03b1e2f5b2616931ac68cd40a39bafe803794"
 dependencies = [
  "log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rocket 0.3.0-dev (git+https://github.com/SergioBenitez/Rocket.git)",

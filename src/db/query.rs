@@ -9,6 +9,8 @@ use brdgme_cmd::cli::CliLog;
 
 use std::collections::{HashSet, HashMap};
 use std::iter::FromIterator;
+use std::usize::MAX as USIZE_MAX;
+use std::cmp::Ordering;
 
 use errors::*;
 use db::models::*;
@@ -158,19 +160,19 @@ pub fn authenticate(search_token: &Uuid, conn: &PgConnection) -> Result<Option<U
 
     let uat: UserAuthToken = match user_auth_tokens::table
         .find(search_token)
-        .filter(
-            user_auth_tokens::created_at.gt(Utc::now().naive_utc() - *TOKEN_EXPIRY),
-        )
+        .filter(user_auth_tokens::created_at.gt(
+            Utc::now().naive_utc() -
+                *TOKEN_EXPIRY,
+        ))
         .first(conn)
         .optional()? {
         Some(v) => v,
         None => return Ok(None),
     };
 
-    Ok(Some(users::table
-        .find(uat.user_id)
-        .first(conn)
-        .chain_err(|| "error finding user")?))
+    Ok(Some(users::table.find(uat.user_id).first(conn).chain_err(
+        || "error finding user",
+    )?))
 }
 
 pub fn find_valid_user_auth_tokens_for_users(
@@ -181,9 +183,10 @@ pub fn find_valid_user_auth_tokens_for_users(
 
     user_auth_tokens::table
         .filter(user_auth_tokens::user_id.eq_any(user_ids))
-        .filter(
-            user_auth_tokens::created_at.gt(Utc::now().naive_utc() - *TOKEN_EXPIRY),
-        )
+        .filter(user_auth_tokens::created_at.gt(
+            Utc::now().naive_utc() -
+                *TOKEN_EXPIRY,
+        ))
         .get_results(conn)
         .chain_err(|| "error finding user auth tokens for user")
 }
@@ -191,10 +194,9 @@ pub fn find_valid_user_auth_tokens_for_users(
 pub fn find_game(id: &Uuid, conn: &PgConnection) -> Result<Game> {
     use db::schema::games;
 
-    games::table
-        .find(id)
-        .first(conn)
-        .chain_err(|| "error finding game")
+    games::table.find(id).first(conn).chain_err(
+        || "error finding game",
+    )
 }
 
 pub fn find_game_version(id: &Uuid, conn: &PgConnection) -> Result<Option<GameVersion>> {
@@ -355,8 +357,9 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
         let player_colors = color::choose(&HashSet::from_iter(color::COLORS.iter()), &color_prefs);
 
         // Create game record.
-        let game = create_game(opts.new_game, conn)
-            .chain_err(|| "could not create new game")?;
+        let game = create_game(opts.new_game, conn).chain_err(
+            || "could not create new game",
+        )?;
 
         // Find or create game type user records.
         let game_version = find_game_version(&opts.new_game.game_version_id, conn)?
@@ -388,6 +391,7 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
                     points: opts.points.get(pos).cloned(),
                     undo_game_state: None,
                     place: opts.placings.get(pos).map(|p| *p as i32),
+                    rating_change: None,
                 },
                 conn,
             ).chain_err(|| "could not create game player")?);
@@ -450,11 +454,9 @@ pub fn player_can_undo_set_undo_game_state(
 ) -> Result<()> {
     use db::schema::game_players;
     conn.transaction(|| {
-        diesel::update(
-            game_players::table
-                .find(game_player_id)
-                .filter(game_players::undo_game_state.is_null()),
-        ).set(game_players::undo_game_state.eq(game_state))
+        diesel::update(game_players::table.find(game_player_id).filter(
+            game_players::undo_game_state.is_null(),
+        )).set(game_players::undo_game_state.eq(game_state))
             .execute(conn)
             .chain_err(
                 || "error updating game player undo_game_state to game_state",
@@ -475,9 +477,9 @@ pub fn player_cannot_undo_set_undo_game_state(
     conn: &PgConnection,
 ) -> Result<Vec<GamePlayer>> {
     use db::schema::game_players;
-    diesel::update(
-        game_players::table.filter(game_players::game_id.eq(game_id)),
-    ).set(game_players::undo_game_state.eq(None::<String>))
+    diesel::update(game_players::table.filter(
+        game_players::game_id.eq(game_id),
+    )).set(game_players::undo_game_state.eq(None::<String>))
         .get_results(conn)
         .chain_err(|| "error updating game players undo_game_state to None")
 }
@@ -489,6 +491,7 @@ pub struct UpdatedGame {
     pub eliminated: Vec<GamePlayer>,
     pub placings: Vec<GamePlayer>,
     pub is_read: Vec<GamePlayer>,
+    pub game_type_users: Vec<GameTypeUser>,
 }
 pub fn update_game_command_success(
     game_id: &Uuid,
@@ -508,12 +511,14 @@ pub fn update_game_command_success(
             player_cannot_undo_set_undo_game_state(game_id, conn)?;
         }
         update_game_points(game_id, points, conn)?;
+        let (placings, game_type_users) = update_game_placings(game_id, placings, conn)?;
         Ok(UpdatedGame {
             game: update_game(game_id, update, conn)?,
             whose_turn: update_game_whose_turn(game_id, whose_turn, conn)?,
             eliminated: update_game_eliminated(game_id, eliminated, conn)?,
-            placings: update_game_placings(game_id, placings, conn)?,
+            placings,
             is_read: update_game_is_read(game_id, &[*game_player_id], conn)?,
+            game_type_users,
         })
     })
 }
@@ -524,18 +529,21 @@ pub fn concede_game(
     conn: &PgConnection,
 ) -> Result<UpdatedGame> {
     conn.transaction(|| {
-        let game_players = find_game_players_by_game(game_id, conn)
-            .chain_err(|| "unable to find game players for concede")?;
+        let game_players = find_game_players_by_game(game_id, conn).chain_err(
+            || "unable to find game players for concede",
+        )?;
         let placings: Vec<usize> = game_players
             .iter()
             .map(|gp| if gp.id != *game_player_id { 1 } else { 2 })
             .collect();
+        let (placings, game_type_users) = update_game_placings(game_id, &placings, conn)?;
         Ok(UpdatedGame {
             game: update_game_is_finished(game_id, true, conn)?,
             whose_turn: update_game_whose_turn(game_id, &[], conn)?,
             eliminated: vec![],
-            placings: update_game_placings(game_id, &placings, conn)?,
+            placings,
             is_read: update_game_is_read(game_id, &[*game_player_id], conn)?,
+            game_type_users,
         })
     })
 }
@@ -547,7 +555,7 @@ pub fn update_game_is_finished(
 ) -> Result<Option<Game>> {
     use db::schema::games;
     diesel::update(games::table.find(game_id))
-        .set((games::is_finished.eq(is_finished)))
+        .set(games::is_finished.eq(is_finished))
         .get_result(conn)
         .optional()
         .chain_err(|| "error updating game is_finished")
@@ -609,9 +617,11 @@ pub fn update_game_whose_turn(
     use db::schema::game_players;
 
     diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
-        .set(
-            game_players::is_turn.eq(game_players::position.eq_any(to_i32_vec(positions))),
-        )
+        .set(game_players::is_turn.eq(game_players::position.eq_any(
+            to_i32_vec(
+                positions,
+            ),
+        )))
         .get_results(conn)
         .chain_err(|| "error updating game players")
 }
@@ -658,33 +668,156 @@ pub fn update_game_eliminated(
     use db::schema::game_players;
 
     diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
-        .set(
-            game_players::is_eliminated.eq(game_players::position.eq_any(to_i32_vec(positions))),
-        )
+        .set(game_players::is_eliminated.eq(
+            game_players::position.eq_any(
+                to_i32_vec(positions),
+            ),
+        ))
         .get_results(conn)
         .chain_err(|| "error updating game players")
 }
 
 pub fn update_game_placings(
-    id: &Uuid,
+    game_id: &Uuid,
     placings: &[usize],
     conn: &PgConnection,
-) -> Result<Vec<GamePlayer>> {
-    Ok(
-        placings
-            .iter()
-            .enumerate()
-            .filter_map(|(pos, place)| {
-                update_game_placing(id, pos, *place, conn).unwrap()
-            })
-            .collect(),
-    )
+) -> Result<(Vec<GamePlayer>, Vec<GameTypeUser>)> {
+    let placings: Vec<usize> = placings.to_owned();
+
+    conn.transaction(|| {
+        let game = find_game(game_id, conn)?;
+        let game_version =
+            find_game_version(&game.game_version_id, conn)?
+                .ok_or_else::<Error, _>(|| "could not find game version for game".into())?;
+        let game_players = find_game_players_by_game(game_id, conn)?;
+        let mut rating_changes: HashMap<usize, i32> = HashMap::new();
+
+        let mut updated_game_type_users: Vec<GameTypeUser> = vec![];
+
+        // We only update ratings if placings are provided and there haven't been any rating changes
+        // yet.
+        let update_ratings: bool = !placings.is_empty() &&
+            game_players
+                .iter()
+                .find(|gp| gp.rating_change.is_some())
+                .is_none();
+        if update_ratings {
+            // We grab existing game type users up front.
+            let game_player_type_users: Vec<(&GamePlayer, GameTypeUser)> =
+                game_players
+                    .iter()
+                    .map(|gp| {
+                        rating_changes.insert(gp.position as usize, 0);
+                        Ok((
+                            gp,
+                            find_or_create_game_type_user(
+                                &game_version.game_type_id,
+                                &gp.user_id,
+                                conn,
+                            )?,
+                        ))
+                    })
+                    .collect::<Result<Vec<(&GamePlayer, GameTypeUser)>>>()?;
+
+            // Iterate and calculate an adjustment against each opponent.
+            for (a_index, &(a_gp, ref a_gtu)) in
+                game_player_type_users
+                    .iter()
+                    .take(game_player_type_users.len() - 1)
+                    .enumerate()
+            {
+                for &(b_gp, ref b_gtu) in game_player_type_users.iter().skip(a_index + 1) {
+                    let a_score: f32 = match placings
+                        .get(a_gp.position as usize)
+                        .cloned()
+                        .unwrap_or(USIZE_MAX)
+                        .cmp(&placings.get(b_gp.position as usize).cloned().unwrap_or(
+                            USIZE_MAX,
+                        )) {
+                        Ordering::Less => 1.0,
+                        Ordering::Equal => 0.5,
+                        Ordering::Greater => 0.0,
+                    };
+                    let rating_change = elo_rating_change(a_gtu.rating, b_gtu.rating, a_score);
+                    *rating_changes.entry(a_gp.position as usize).or_insert(0) += rating_change;
+                    *rating_changes.entry(b_gp.position as usize).or_insert(0) -= rating_change;
+                }
+            }
+
+            // Save the adjusted scores back to the game type users
+            for &(gp, ref gtu) in &game_player_type_users {
+                let rating_change = rating_changes
+                    .get(&(gp.position as usize))
+                    .cloned()
+                    .unwrap_or(0);
+                if rating_change == 0 {
+                    continue;
+                }
+                if let Some(ugtu) = update_game_type_user_rating(
+                    &gtu.id,
+                    gtu.rating + rating_change,
+                    conn,
+                )?
+                {
+                    updated_game_type_users.push(ugtu)
+                }
+            }
+        }
+
+        Ok((
+            placings
+                .iter()
+                .enumerate()
+                .filter_map(|(pos, place)| {
+                    update_game_player_result(
+                        game_id,
+                        pos,
+                        *place,
+                        rating_changes.get(&pos).cloned(),
+                        conn,
+                    ).unwrap()
+                })
+                .collect(),
+            updated_game_type_users,
+        ))
+    })
 }
 
-pub fn update_game_placing(
+fn update_game_type_user_rating(
+    id: &Uuid,
+    rating: i32,
+    conn: &PgConnection,
+) -> Result<Option<GameTypeUser>> {
+    use db::schema::game_type_users;
+
+    diesel::update(game_type_users::table.find(id))
+        .set(game_type_users::rating.eq(rating))
+        .get_result(conn)
+        .optional()
+        .chain_err(|| "unable to update game type user rating")
+}
+
+const ELO_K: f32 = 32.0;
+fn elo_rating_change(a_rating: i32, b_rating: i32, a_score: f32) -> i32 {
+    let a_expected = elo_expected_score(a_rating, b_rating);
+    (ELO_K * (a_score - a_expected)).round() as i32
+}
+
+fn elo_transformed_rating(rating: i32) -> i32 {
+    10i32.pow((rating / 400) as u32)
+}
+
+fn elo_expected_score(a_rating: i32, b_rating: i32) -> f32 {
+    let a_trans = elo_transformed_rating(a_rating) as f32;
+    let b_trans = elo_transformed_rating(b_rating) as f32;
+    a_trans / (a_trans + b_trans)
+}
+
+pub fn update_game_player_result(
     game_id: &Uuid,
     position: usize,
     place: usize,
+    rating_change: Option<i32>,
     conn: &PgConnection,
 ) -> Result<Option<GamePlayer>> {
     use db::schema::game_players;
@@ -693,7 +826,10 @@ pub fn update_game_placing(
         game_players::table
             .filter(game_players::game_id.eq(game_id))
             .filter(game_players::position.eq(position as i32)),
-    ).set(game_players::place.eq(place as i32))
+    ).set((
+        game_players::place.eq(place as i32),
+        game_players::rating_change.eq(rating_change),
+    ))
         .get_result(conn)
         .optional()
         .chain_err(|| "error updating place for game player")
@@ -707,9 +843,9 @@ pub fn update_game_is_read(
     use db::schema::game_players;
 
     diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
-        .set(
-            game_players::is_read.eq(game_players::id.eq_any(game_player_ids)),
-        )
+        .set(game_players::is_read.eq(game_players::id.eq_any(
+            game_player_ids,
+        )))
         .get_results(conn)
         .chain_err(|| "error updating game players")
 }
@@ -1028,11 +1164,9 @@ pub fn find_game_logs_for_player(
         game_logs::table
             .left_outer_join(game_log_targets::table)
             .filter(game_logs::game_id.eq(game_player.game_id))
-            .filter(
-                game_logs::is_public
-                    .eq(true)
-                    .or(game_log_targets::game_player_id.eq(game_player_id)),
-            )
+            .filter(game_logs::is_public.eq(true).or(
+                game_log_targets::game_player_id.eq(game_player_id),
+            ))
             .order(game_logs::logged_at)
             .get_results::<(GameLog, Option<GameLogTarget>)>(conn)
             .chain_err(|| "error finding game logs")?
@@ -1285,6 +1419,7 @@ mod tests {
                         is_read: false,
                         points: None,
                         undo_game_state: None,
+                        rating_change: None,
                     },
                     NewGamePlayer {
                         game_id: game.id,
@@ -1300,6 +1435,7 @@ mod tests {
                         is_read: false,
                         points: Some(1.5),
                         undo_game_state: None,
+                        rating_change: None,
                     },
                 ],
                 conn,
@@ -1382,22 +1518,37 @@ mod tests {
     }
 
     #[test]
+    fn elo_rating_change_works() {
+        assert_eq!(elo_rating_change(2400, 2000, 0.0), -29i32);
+        assert_eq!(elo_rating_change(2400, 2000, 1.0), 3i32);
+        assert_eq!(elo_rating_change(2400, 2000, 0.5), -13i32);
+    }
+
+    #[test]
     #[ignore]
     fn update_game_placings_works() {
         with_db(|conn| {
             let game_extended = create_test_game(5, conn);
             update_game_placings(&game_extended.game.id, &[1, 3, 2, 5, 4], conn)
                 .expect("expected to update game placings");
-            let updated_game_extended = find_game_extended(&game_extended.game.id, conn)
-                .expect("expected to find game again");
+            let updated_game_extended = find_game_extended(&game_extended.game.id, conn).expect(
+                "expected to find game again",
+            );
             assert_eq!(
-                vec![Some(1i32), Some(3i32), Some(2i32), Some(5i32), Some(4i32)],
                 updated_game_extended
                     .game_players
                     .iter()
                     .map(|gptu| gptu.game_player.place)
-                    .collect::<Vec<Option<i32>>>()
+                    .collect::<Vec<Option<i32>>>(),
+                vec![Some(1), Some(3), Some(2), Some(5), Some(4)]
             );
+
+            let ratings: Vec<i32> = updated_game_extended
+                .game_players
+                .iter()
+                .map(|gptu| gptu.game_type_user.rating)
+                .collect();
+            assert_eq!(ratings, vec![1264, 1200, 1232, 1136, 1168]);
         });
     }
 }
