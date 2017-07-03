@@ -1,7 +1,17 @@
 sudo: required
+language: rust
+rust: nightly
 services:
 - docker
+env:
+- DATABASE_URL=postgres://postgres@localhost/brdgme
 script:
+- cargo install diesel_cli
+- diesel database setup
+- cargo build --verbose --all
+- cargo test --verbose
+- cargo test --verbose --ignored
+- cargo clean
 - ./build-release
 deploy:
   provider: elasticbeanstalk
