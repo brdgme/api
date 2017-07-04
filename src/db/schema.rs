@@ -133,3 +133,33 @@ table! {
         has_accepted -> Nullable<Bool>,
     }
 }
+
+table! {
+    chats {
+        id -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+table! {
+    chat_messages {
+        id -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        chat_id -> Uuid,
+        user_id -> Uuid,
+        message -> Text,
+    }
+}
+
+table! {
+    chat_users {
+        id -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        chat_id -> Uuid,
+        user_id -> Uuid,
+        last_read_at -> Timestamp,
+    }
+}

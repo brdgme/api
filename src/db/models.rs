@@ -433,6 +433,53 @@ pub struct NewFriend {
     pub has_accepted: Option<bool>,
 }
 
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+pub struct Chat {
+    pub id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[belongs_to(Chat)]
+#[belongs_to(User)]
+pub struct ChatMessage {
+    pub id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub chat_id: Uuid,
+    pub user_id: Uuid,
+    pub message: String,
+}
+
+#[derive(Insertable)]
+#[table_name = "chat_messages"]
+pub struct NewChatMessage<'a> {
+    pub chat_id: Uuid,
+    pub user_id: Uuid,
+    pub message: &'a str,
+}
+
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[belongs_to(Chat)]
+#[belongs_to(User)]
+pub struct ChatUser {
+    pub id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub chat_id: Uuid,
+    pub user_id: Uuid,
+    pub last_read_at: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[table_name = "chat_users"]
+pub struct NewChatUser {
+    pub chat_id: Uuid,
+    pub user_id: Uuid,
+    pub last_read_at: Option<NaiveDateTime>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
