@@ -803,13 +803,13 @@ fn elo_rating_change(a_rating: i32, b_rating: i32, a_score: f32) -> i32 {
     (ELO_K * (a_score - a_expected)).round() as i32
 }
 
-fn elo_transformed_rating(rating: i32) -> i32 {
-    10i32.pow((rating / 400) as u32)
+fn elo_transformed_rating(rating: i32) -> f32 {
+    10f32.powf((rating as f32 / 400.0))
 }
 
 fn elo_expected_score(a_rating: i32, b_rating: i32) -> f32 {
-    let a_trans = elo_transformed_rating(a_rating) as f32;
-    let b_trans = elo_transformed_rating(b_rating) as f32;
+    let a_trans = elo_transformed_rating(a_rating);
+    let b_trans = elo_transformed_rating(b_rating);
     a_trans / (a_trans + b_trans)
 }
 
@@ -1519,6 +1519,7 @@ mod tests {
 
     #[test]
     fn elo_rating_change_works() {
+        assert_eq!(elo_rating_change(1184, 1200, 0.0), -15i32);
         assert_eq!(elo_rating_change(2400, 2000, 0.0), -29i32);
         assert_eq!(elo_rating_change(2400, 2000, 1.0), 3i32);
         assert_eq!(elo_rating_change(2400, 2000, 0.5), -13i32);
