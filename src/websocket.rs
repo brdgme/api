@@ -102,6 +102,7 @@ pub fn game_update<'a>(
             pub_state: public_render.pub_state.to_owned(),
             html: render::markup_html(&public_render.render, &markup_players)?,
             command_spec: None,
+            chat: game.chat.to_owned(),
         }).chain_err(|| "unable to convert game to JSON")?)
         .ignore();
     for gp in &game.game_players {
@@ -123,6 +124,7 @@ pub fn game_update<'a>(
             pub_state: player_render.pub_state.to_owned(),
             html: render::markup_html(&player_render.render, &markup_players)?,
             command_spec: player_render.command_spec.to_owned(),
+            chat: game.chat.to_owned(),
         };
         for uat in user_auth_tokens {
             if uat.user_id == gp.user.id {

@@ -154,6 +154,7 @@ pub struct ShowResponse {
     pub html: String,
     pub game_logs: Vec<models::RenderedGameLog>,
     pub command_spec: Option<CommandSpec>,
+    pub chat: Option<query::chat::PublicChatExtended>,
 }
 
 #[get("/<id>")]
@@ -223,6 +224,7 @@ fn game_extended_to_show_response(
             .map(|gl| gl.into_rendered(&markup_players))
             .collect::<Result<Vec<models::RenderedGameLog>>>()?,
         command_spec: render.command_spec.to_owned(),
+        chat: public.chat,
     })
 }
 
