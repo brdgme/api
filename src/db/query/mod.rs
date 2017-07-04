@@ -233,6 +233,7 @@ pub struct GameExtended {
     pub game_type: GameType,
     pub game_version: GameVersion,
     pub game_players: Vec<GamePlayerTypeUser>,
+    pub chat: Option<chat::ChatExtended>,
 }
 
 impl GameExtended {
@@ -246,6 +247,7 @@ impl GameExtended {
                 .into_iter()
                 .map(|gptu| gptu.into_public())
                 .collect(),
+            chat: self.chat.map(|c| c.into_public()),
         }
     }
 
@@ -266,6 +268,7 @@ pub struct PublicGameExtended {
     pub game_version: PublicGameVersion,
     pub game_player: Option<PublicGamePlayer>,
     pub game_players: Vec<PublicGamePlayerTypeUser>,
+    pub chat: Option<chat::PublicChatExtended>,
 }
 
 pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<GameExtended>> {
@@ -296,6 +299,9 @@ pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<
                 game_type: game_type,
                 game_version: game_version,
                 game_players: players,
+                chat: game.chat_id.map(|chat_id| {
+                    chat::find_extended(&chat_id, conn).expect("error finding chat for game")
+                }),
             })
         })
         .collect::<Result<Vec<GameExtended>>>()?)
@@ -317,6 +323,9 @@ pub fn find_game_extended(id: &Uuid, conn: &PgConnection) -> Result<GameExtended
         game_type: game_type,
         game_version: game_version,
         game_players: players,
+        chat: game.chat_id.map(|chat_id| {
+            chat::find_extended(&chat_id, conn).expect("error finding chat for game")
+        }),
     })
 }
 

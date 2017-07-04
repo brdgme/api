@@ -108,6 +108,23 @@ pub struct ChatExtended {
     pub chat_messages: Vec<ChatMessage>,
 }
 
+impl ChatExtended {
+    pub fn into_public(self) -> PublicChatExtended {
+        PublicChatExtended {
+            chat: self.chat,
+            chat_users: self.chat_users.into_iter().collect(),
+            chat_messages: self.chat_messages.into_iter().collect(),
+        }
+    }
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct PublicChatExtended {
+    pub chat: PublicChat,
+    pub chat_users: Vec<PublicChatUser>,
+    pub chat_messages: Vec<PublicChatMessage>,
+}
+
 pub fn find_extended(id: &Uuid, conn: &PgConnection) -> Result<ChatExtended> {
     Ok(ChatExtended {
         chat: find(id, conn)?,

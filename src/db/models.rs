@@ -436,12 +436,14 @@ pub struct NewFriend {
     pub has_accepted: Option<bool>,
 }
 
-#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize)]
 pub struct Chat {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
+
+pub type PublicChat = Chat;
 
 #[derive(Insertable)]
 #[table_name = "chats"]
@@ -449,7 +451,7 @@ pub struct NewChat {
     pub id: Option<Uuid>, // Can't use an empty struct
 }
 
-#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize)]
 #[belongs_to(ChatUser)]
 pub struct ChatMessage {
     pub id: Uuid,
@@ -459,6 +461,8 @@ pub struct ChatMessage {
     pub message: String,
 }
 
+pub type PublicChatMessage = ChatMessage;
+
 #[derive(Insertable)]
 #[table_name = "chat_messages"]
 pub struct NewChatMessage<'a> {
@@ -466,7 +470,7 @@ pub struct NewChatMessage<'a> {
     pub message: &'a str,
 }
 
-#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
+#[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize)]
 #[belongs_to(Chat)]
 #[belongs_to(User)]
 pub struct ChatUser {
@@ -477,6 +481,8 @@ pub struct ChatUser {
     pub user_id: Uuid,
     pub last_read_at: NaiveDateTime,
 }
+
+pub type PublicChatUser = ChatUser;
 
 #[derive(Insertable)]
 #[table_name = "chat_users"]
