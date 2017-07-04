@@ -180,6 +180,7 @@ pub struct Game {
     pub is_finished: bool,
     pub finished_at: Option<NaiveDateTime>,
     pub game_state: String,
+    pub chat_id: Option<Uuid>,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -190,6 +191,7 @@ pub struct PublicGame {
     pub game_version_id: Uuid,
     pub is_finished: bool,
     pub finished_at: Option<NaiveDateTime>,
+    pub chat_id: Option<Uuid>,
 }
 
 impl Game {
@@ -201,6 +203,7 @@ impl Game {
             game_version_id: self.game_version_id,
             is_finished: self.is_finished,
             finished_at: self.finished_at,
+            chat_id: self.chat_id,
         }
     }
 }

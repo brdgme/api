@@ -63,6 +63,7 @@ table! {
         is_finished -> Bool,
         finished_at -> Nullable<Timestamp>,
         game_state -> Text,
+        chat_id -> Nullable<Uuid>,
     }
 }
 

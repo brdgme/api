@@ -18,6 +18,7 @@ use db::models::*;
 use db::color::{self, Color};
 
 pub mod chat;
+pub mod game;
 
 lazy_static! {
     static ref CONFIRMATION_EXPIRY: Duration = Duration::minutes(30);
@@ -333,6 +334,7 @@ pub struct CreateGameOpts<'a> {
     pub creator_id: &'a Uuid,
     pub opponent_ids: &'a [Uuid],
     pub opponent_emails: &'a [String],
+    pub chat_id: Option<Uuid>,
 }
 pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Result<CreatedGame> {
     // We get the timestamp for now before logs are created to make sure players can read them.
@@ -360,9 +362,27 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
         let player_colors = color::choose(&HashSet::from_iter(color::COLORS.iter()), &color_prefs);
 
         // Create game record.
-        let game = create_game(opts.new_game, conn).chain_err(
+        let mut game_record = create_game(opts.new_game, conn).chain_err(
             || "could not create new game",
         )?;
+
+        // Create chat if needed
+        let chat_id = if let Some(chat_id) = opts.chat_id {
+            chat_id
+        } else {
+            let chat = chat::create(conn).chain_err(
+                || "error creating chat for new game",
+            )?;
+            chat::add_users(
+                chat.id,
+                users.iter().map(|u| u.id).collect::<Vec<Uuid>>().as_ref(),
+                conn,
+            ).chain_err(|| "error adding users to new chat")?;
+            chat.id
+        };
+        game::update_chat_id(&game_record.id, chat_id, conn)
+            .chain_err(|| "error updating chat_id for newly created game")?;
+        game_record.chat_id = Some(chat_id);
 
         // Find or create game type user records.
         let game_version = find_game_version(&opts.new_game.game_version_id, conn)?
@@ -381,7 +401,7 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
         for (pos, user) in users.iter().enumerate() {
             players.push(create_game_player(
                 &NewGamePlayer {
-                    game_id: game.id,
+                    game_id: game_record.id,
                     user_id: user.id,
                     position: pos as i32,
                     color: &player_colors[pos].to_string(),
@@ -400,7 +420,7 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
             ).chain_err(|| "could not create game player")?);
         }
         Ok(CreatedGame {
-            game: game,
+            game: game_record,
             opponents: opponents,
             players: players,
         })
@@ -1238,6 +1258,7 @@ fn create_test_game(players: usize, conn: &PgConnection) -> GameExtended {
                 .collect::<Vec<Uuid>>()
                 .as_ref(),
             opponent_emails: &[],
+            chat_id: None,
         },
         conn,
     ).expect("expected to create game");

@@ -74,6 +74,7 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
                     creator_id: &user_id,
                     opponent_ids: &opponent_ids,
                     opponent_emails: &opponent_emails,
+                    chat_id: None,
                 },
                 conn,
             ).chain_err(|| "unable to create game")?;
