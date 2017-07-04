@@ -147,8 +147,7 @@ table! {
         id -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
-        chat_id -> Uuid,
-        user_id -> Uuid,
+        chat_user_id -> Uuid,
         message -> Text,
     }
 }

@@ -440,23 +440,26 @@ pub struct Chat {
     pub updated_at: NaiveDateTime,
 }
 
+#[derive(Insertable)]
+#[table_name = "chats"]
+pub struct NewChat {
+    pub id: Option<Uuid>, // Can't use an empty struct
+}
+
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
-#[belongs_to(Chat)]
-#[belongs_to(User)]
+#[belongs_to(ChatUser)]
 pub struct ChatMessage {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
-    pub chat_id: Uuid,
-    pub user_id: Uuid,
+    pub chat_user_id: Uuid,
     pub message: String,
 }
 
 #[derive(Insertable)]
 #[table_name = "chat_messages"]
 pub struct NewChatMessage<'a> {
-    pub chat_id: Uuid,
-    pub user_id: Uuid,
+    pub chat_user_id: Uuid,
     pub message: &'a str,
 }
 

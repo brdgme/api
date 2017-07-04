@@ -13,8 +13,11 @@ use std::usize::MAX as USIZE_MAX;
 use std::cmp::Ordering;
 
 use errors::*;
+use db::CONN;
 use db::models::*;
 use db::color::{self, Color};
+
+pub mod chat;
 
 lazy_static! {
     static ref CONFIRMATION_EXPIRY: Duration = Duration::minutes(30);
@@ -1177,10 +1180,74 @@ pub fn find_game_logs_for_player(
 }
 
 #[cfg(test)]
+fn with_db<F>(closure: F)
+where
+    F: Fn(&PgConnection),
+{
+    let conn = &CONN.w.get().unwrap();
+    conn.test_transaction::<_, Error, _>(|| {
+        closure(conn);
+        Ok(())
+    });
+}
+
+#[cfg(test)]
+fn create_test_game(players: usize, conn: &PgConnection) -> GameExtended {
+    let mut users = vec![];
+    for p in 0..players {
+        users.push(
+            create_user_by_email(&format!("{}", p), conn)
+                .expect("expected to create user by name")
+                .1,
+        );
+    }
+    let game_type = create_game_type(
+        &NewGameType {
+            name: "Test Game",
+            player_counts: vec![players as i32],
+            weight: 1.52,
+        },
+        conn,
+    ).expect("expected to create game type");
+    let game_version = create_game_version(
+        &NewGameVersion {
+            game_type_id: game_type.id,
+            uri: "https://example.com/test-game-1",
+            name: "v1",
+            is_public: true,
+            is_deprecated: false,
+        },
+        conn,
+    ).expect("expected to create game version");
+    let created_game = create_game_with_users(
+        &CreateGameOpts {
+            new_game: &NewGame {
+                game_version_id: game_version.id,
+                is_finished: false,
+                game_state: "",
+            },
+            whose_turn: &[0],
+            eliminated: &[],
+            placings: &[],
+            points: &[],
+            creator_id: &users[0].id,
+            opponent_ids: users
+                .iter()
+                .skip(1)
+                .map(|p| p.id)
+                .collect::<Vec<Uuid>>()
+                .as_ref(),
+            opponent_emails: &[],
+        },
+        conn,
+    ).expect("expected to create game");
+    find_game_extended(&created_game.game.id, conn).expect("expected to find game")
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use db::color::Color;
-    use db::CONN;
 
     #[test]
     fn rand_code_works() {
@@ -1190,70 +1257,6 @@ mod tests {
             assert!(n < 1000000, "n >= 1000000");
         }
     }
-
-    fn with_db<F>(closure: F)
-    where
-        F: Fn(&PgConnection),
-    {
-        let conn = &CONN.w.get().unwrap();
-        conn.test_transaction::<_, Error, _>(|| {
-            closure(conn);
-            Ok(())
-        });
-    }
-
-    fn create_test_game(players: usize, conn: &PgConnection) -> GameExtended {
-        let mut users = vec![];
-        for p in 0..players {
-            users.push(
-                create_user_by_email(&format!("{}", p), conn)
-                    .expect("expected to create user by name")
-                    .1,
-            );
-        }
-        let game_type = create_game_type(
-            &NewGameType {
-                name: "Test Game",
-                player_counts: vec![players as i32],
-                weight: 1.52,
-            },
-            conn,
-        ).expect("expected to create game type");
-        let game_version = create_game_version(
-            &NewGameVersion {
-                game_type_id: game_type.id,
-                uri: "https://example.com/test-game-1",
-                name: "v1",
-                is_public: true,
-                is_deprecated: false,
-            },
-            conn,
-        ).expect("expected to create game version");
-        let created_game = create_game_with_users(
-            &CreateGameOpts {
-                new_game: &NewGame {
-                    game_version_id: game_version.id,
-                    is_finished: false,
-                    game_state: "",
-                },
-                whose_turn: &[0],
-                eliminated: &[],
-                placings: &[],
-                points: &[],
-                creator_id: &users[0].id,
-                opponent_ids: users
-                    .iter()
-                    .skip(1)
-                    .map(|p| p.id)
-                    .collect::<Vec<Uuid>>()
-                    .as_ref(),
-                opponent_emails: &[],
-            },
-            conn,
-        ).expect("expected to create game");
-        find_game_extended(&created_game.game.id, conn).expect("expected to find game")
-    }
-
     #[test]
     #[ignore]
     fn create_user_by_name_works() {
