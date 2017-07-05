@@ -26,8 +26,8 @@ rocket_contrib = { git = "https://github.com/SergioBenitez/Rocket.git" }
 email = "0.0.17"
 hyper = "0.10.7"
 hyper-rustls = "0.6.1"
-diesel = { git = "https://github.com/diesel-rs/diesel.git", version = "0.13.0", features = ["postgres", "uuid", "chrono", "large-tables"] }
-diesel_codegen = { version = "0.13.0", features = ["postgres"] }
+diesel = { version = "0.14.0", features = ["postgres", "uuid", "chrono", "large-tables"] }
+diesel_codegen = { version = "0.14.0", features = ["postgres"] }
 r2d2-diesel = "0.12.0"
 unicase = "1.4.0"
 redis = "0.8.0"

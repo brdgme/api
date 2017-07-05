@@ -13,9 +13,11 @@ use std::usize::MAX as USIZE_MAX;
 use std::cmp::Ordering;
 
 use errors::*;
-use db::CONN;
 use db::models::*;
 use db::color::{self, Color};
+
+#[cfg(test)]
+use db::CONN;
 
 pub mod chat;
 pub mod game;
