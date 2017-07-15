@@ -1,5 +1,5 @@
 use rocket::State;
-use rocket_contrib::JSON;
+use rocket_contrib::Json;
 use uuid::Uuid;
 use diesel::Connection;
 use diesel::pg::PgConnection;
@@ -31,7 +31,7 @@ pub struct CreateRequest {
 }
 
 #[post("/", data = "<data>")]
-pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON<ShowResponse>>> {
+pub fn create(data: Json<CreateRequest>, user: models::User) -> Result<CORS<Json<ShowResponse>>> {
     let user_id = user.id;
     let data = data.into_inner();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
@@ -100,7 +100,7 @@ pub fn create(data: JSON<CreateRequest>, user: models::User) -> Result<CORS<JSON
         &player_renders,
         &query::find_valid_user_auth_tokens_for_users(&user_ids, conn)?,
     )?;
-    Ok(CORS(JSON(game_extended_to_show_response(
+    Ok(CORS(Json(game_extended_to_show_response(
         player,
         &game_extended,
         player.and_then(
@@ -158,7 +158,7 @@ pub struct ShowResponse {
 }
 
 #[get("/<id>")]
-pub fn show(id: UuidParam, user: Option<models::User>) -> Result<CORS<JSON<ShowResponse>>> {
+pub fn show(id: UuidParam, user: Option<models::User>) -> Result<CORS<Json<ShowResponse>>> {
     let id = id.into_uuid();
     let conn = &*CONN.r.get().chain_err(|| "error getting connection")?;
 
@@ -170,7 +170,7 @@ pub fn show(id: UuidParam, user: Option<models::User>) -> Result<CORS<JSON<ShowR
             .find(|&gptu| u.id == gptu.user.id)
             .map(|gptu| &gptu.game_player)
     });
-    Ok(CORS(JSON(game_extended_to_show_response(
+    Ok(CORS(Json(game_extended_to_show_response(
         game_player,
         &game_extended,
         None,
@@ -238,8 +238,8 @@ pub fn command(
     id: UuidParam,
     user: models::User,
     game_update_tx: State<Mutex<Sender<websocket::GameUpdateOpts>>>,
-    data: JSON<CommandRequest>,
-) -> Result<CORS<JSON<ShowResponse>>> {
+    data: Json<CommandRequest>,
+) -> Result<CORS<Json<ShowResponse>>> {
     let id = id.into_uuid();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
     conn.transaction::<_, Error, _>(|| {
@@ -351,7 +351,7 @@ pub fn command(
             .iter()
             .find(|gptu| gptu.game_player.id == player.id)
             .map(|gptu| &gptu.game_player);
-        Ok(CORS(JSON(game_extended_to_show_response(
+        Ok(CORS(Json(game_extended_to_show_response(
             gp,
             &game_extended,
             gp.and_then(|gp| player_renders.get(gp.position as usize)),
@@ -365,7 +365,7 @@ pub fn undo(
     id: UuidParam,
     user: models::User,
     game_update_tx: State<Mutex<Sender<websocket::GameUpdateOpts>>>,
-) -> Result<CORS<JSON<ShowResponse>>> {
+) -> Result<CORS<Json<ShowResponse>>> {
     let id = id.into_uuid();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
@@ -466,7 +466,7 @@ pub fn undo(
             .iter()
             .find(|gptu| gptu.game_player.id == player.id)
             .map(|gptu| &gptu.game_player);
-        Ok(CORS(JSON(game_extended_to_show_response(
+        Ok(CORS(Json(game_extended_to_show_response(
             gp,
             &game_extended,
             gp.and_then(|gp| player_renders.get(gp.position as usize)),
@@ -479,12 +479,12 @@ pub fn undo(
 pub fn mark_read(
     id: UuidParam,
     user: models::User,
-) -> Result<CORS<JSON<Option<models::PublicGamePlayer>>>> {
+) -> Result<CORS<Json<Option<models::PublicGamePlayer>>>> {
     let id = id.into_uuid();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
     conn.transaction::<_, Error, _>(|| {
-        Ok(CORS(JSON(
+        Ok(CORS(Json(
             query::mark_game_read(&id, &user.id, conn)
                 .chain_err(|| "error marking game read")?
                 .map(|gp| gp.into_public()),
@@ -497,7 +497,7 @@ pub fn concede(
     id: UuidParam,
     user: models::User,
     game_update_tx: State<Mutex<Sender<websocket::GameUpdateOpts>>>,
-) -> Result<CORS<JSON<ShowResponse>>> {
+) -> Result<CORS<Json<ShowResponse>>> {
     let id = id.into_uuid();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
@@ -589,7 +589,7 @@ pub fn concede(
             .iter()
             .find(|gptu| gptu.game_player.id == player.id)
             .map(|gptu| &gptu.game_player);
-        Ok(CORS(JSON(game_extended_to_show_response(
+        Ok(CORS(Json(game_extended_to_show_response(
             gp,
             &game_extended,
             gp.and_then(|gp| player_renders.get(gp.position as usize)),

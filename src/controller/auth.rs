@@ -1,5 +1,5 @@
 use rocket::request::{self, Request, FromRequest};
-use rocket_contrib::JSON;
+use rocket_contrib::Json;
 use rocket::http::Status;
 use rocket::http::hyper::header::Basic;
 use rocket::Outcome;
@@ -20,12 +20,11 @@ pub struct CreateForm {
 }
 
 #[post("/", data = "<data>")]
-pub fn create(data: JSON<CreateForm>) -> Result<CORS<()>> {
+pub fn create(data: Json<CreateForm>) -> Result<CORS<()>> {
     let create_email = data.into_inner().email;
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
-    let confirmation = query::user_login_request(&create_email, conn).chain_err(
-        || "unable to request user login",
-    )?;
+    let confirmation = query::user_login_request(&create_email, conn)
+        .chain_err(|| "unable to request user login")?;
 
     mail::send(
         EmailBuilder::new()
@@ -52,13 +51,13 @@ pub struct ConfirmRequest {
 }
 
 #[post("/confirm", data = "<data>")]
-pub fn confirm(data: JSON<ConfirmRequest>) -> Result<CORS<JSON<String>>> {
+pub fn confirm(data: Json<ConfirmRequest>) -> Result<CORS<Json<String>>> {
     let data = data.into_inner();
     let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
 
     match query::user_login_confirm(&data.email, &data.code, conn)
         .chain_err(|| "unable to confirm login")? {
-        Some(token) => Ok(CORS(JSON(token.id.to_string()))),
+        Some(token) => Ok(CORS(Json(token.id.to_string()))),
         None => Err("unable to confirm login".into()),
     }
 }
