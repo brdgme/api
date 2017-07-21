@@ -22,44 +22,55 @@ pub fn connect() -> Result<Client> {
     Client::open(CONFIG.redis_url.as_ref()).chain_err(|| "unable to open client")
 }
 
-pub struct GameUpdater {
-    rx: Receiver<GameUpdateOpts>,
+pub struct Message {
+    pub channel: String,
+    pub payload: MessageKind,
 }
 
-impl GameUpdater {
-    pub fn new() -> (Self, Sender<GameUpdateOpts>) {
+#[derive(Serialize, Clone)]
+pub enum MessageKind {
+    GameRestarted {
+        game_id: Uuid,
+        restarted_game_id: Uuid,
+    },
+    GameUpdate(ShowResponse),
+}
+
+pub struct PubQueue {
+    rx: Receiver<Message>,
+}
+
+impl PubQueue {
+    pub fn new() -> (Self, Sender<Message>) {
         let (tx, rx) = channel();
-        (GameUpdater { rx }, tx)
+        (PubQueue { rx }, tx)
     }
 
-    pub fn run(&self) {
+    pub fn run(&self) -> Result<()> {
+        let conn = CLIENT
+            .get_connection()
+            .chain_err(|| "unable to get Redis connection from client")?;
         loop {
             match self.rx.recv() {
-                Ok(opts) => {
-                    if let Err(e) = game_update(
-                        &opts.game,
-                        &opts.game_logs,
-                        &opts.public_render,
-                        &opts.player_renders,
-                        &opts.user_auth_tokens,
-                    )
-                    {
-                        warn!("error sending game update: {}", e);
-                    }
+                Ok(message) => {
+                    match serde_json::to_string(&message.payload) {
+                        Ok(payload) => {
+                            let mut pipe = redis::pipe();
+                            pipe.cmd("PUBLISH")
+                                .arg(message.channel)
+                                .arg(payload)
+                                .ignore();
+                            if let Err(e) = pipe.query::<()>(&conn) {
+                                warn!("error publishing message: {}", e);
+                            }
+                        }
+                        Err(e) => warn!("error converting message payload to JSON: {}", e),
+                    };
                 }
-                Err(e) => warn!("error receiving game update options: {}", e),
+                Err(e) => warn!("error receiving publish message: {}", e),
             }
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct GameUpdateOpts {
-    pub game: PublicGameExtended,
-    pub game_logs: Vec<CreatedGameLog>,
-    pub public_render: cli::Render,
-    pub player_renders: Vec<cli::Render>,
-    pub user_auth_tokens: Vec<UserAuthToken>,
 }
 
 fn created_logs_for_player(
@@ -78,33 +89,67 @@ fn created_logs_for_player(
         .collect()
 }
 
-pub fn game_update<'a>(
+fn game_channel(game_id: &Uuid) -> String {
+    format!("game.{}", game_id)
+}
+
+fn user_channel(user_auth_token_id: &Uuid) -> String {
+    format!("user.{}", user_auth_token_id)
+}
+
+pub fn enqueue_game_restarted(
+    game_id: &Uuid,
+    restarted_game_id: &Uuid,
+    user_auth_tokens: &[UserAuthToken],
+    pub_queue_tx: &Sender<Message>,
+) -> Result<()> {
+    let message = MessageKind::GameRestarted {
+        game_id: game_id.to_owned(),
+        restarted_game_id: restarted_game_id.to_owned(),
+    };
+    pub_queue_tx
+        .send(Message {
+            channel: game_channel(game_id),
+            payload: message.clone(),
+        })
+        .chain_err(|| "error enqueuing public game restarted message")?;
+    for uat in user_auth_tokens {
+        pub_queue_tx
+            .send(Message {
+                channel: user_channel(&uat.id),
+                payload: message.clone(),
+            })
+            .chain_err(|| "error enqueuing user game restarted message")?;
+    }
+    Ok(())
+}
+
+pub fn enqueue_game_update<'a>(
     game: &'a PublicGameExtended,
     game_logs: &[CreatedGameLog],
     public_render: &cli::Render,
     player_renders: &[cli::Render],
     user_auth_tokens: &[UserAuthToken],
+    pub_queue_tx: &Sender<Message>,
 ) -> Result<()> {
-    let conn = CLIENT.get_connection().chain_err(
-        || "unable to get Redis connection from client",
-    )?;
     let markup_players = render::public_game_players_to_markup_players(&game.game_players)?;
-    let mut pipe = redis::pipe();
-    pipe.cmd("PUBLISH")
-        .arg(format!("game.{}", game.game.id))
-        .arg(&serde_json::to_string(&ShowResponse {
-            game_player: None,
-            game: game.game.to_owned(),
-            game_type: game.game_type.to_owned(),
-            game_version: game.game_version.to_owned(),
-            game_players: game.game_players.to_owned(),
-            game_logs: created_logs_for_player(None, game_logs, &markup_players)?,
-            pub_state: public_render.pub_state.to_owned(),
-            html: render::markup_html(&public_render.render, &markup_players)?,
-            command_spec: None,
-            chat: game.chat.to_owned(),
-        }).chain_err(|| "unable to convert game to JSON")?)
-        .ignore();
+    pub_queue_tx
+        .send(Message {
+            channel: game_channel(&game.game.id),
+            payload: MessageKind::GameUpdate(ShowResponse {
+                game_player: None,
+                game: game.game.to_owned(),
+                game_type: game.game_type.to_owned(),
+                game_version: game.game_version.to_owned(),
+                game_players: game.game_players.to_owned(),
+                game_logs: created_logs_for_player(None, game_logs, &markup_players)?,
+                pub_state: public_render.pub_state.to_owned(),
+                html: render::markup_html(&public_render.render, &markup_players)?,
+                command_spec: None,
+                chat: game.chat.to_owned(),
+            }),
+        })
+        .chain_err(|| "error enqueuing public game update")?;
     for gp in &game.game_players {
         let player_render = match player_renders.get(gp.game_player.position as usize) {
             Some(pr) => pr,
@@ -128,16 +173,14 @@ pub fn game_update<'a>(
         };
         for uat in user_auth_tokens {
             if uat.user_id == gp.user.id {
-                pipe.cmd("PUBLISH")
-                    .arg(format!("user.{}", uat.id))
-                    .arg(&serde_json::to_string(&player_message).chain_err(
-                        || "unable to convert game to JSON",
-                    )?)
-                    .ignore();
+                pub_queue_tx
+                    .send(Message {
+                        channel: user_channel(&uat.id),
+                        payload: MessageKind::GameUpdate(player_message.clone()),
+                    })
+                    .chain_err(|| "error enqueuing player game update")?;
             }
         }
     }
-    pipe.query(&conn).chain_err(
-        || "error publishing game updates",
-    )
+    Ok(())
 }

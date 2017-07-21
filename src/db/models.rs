@@ -181,6 +181,7 @@ pub struct Game {
     pub finished_at: Option<NaiveDateTime>,
     pub game_state: String,
     pub chat_id: Option<Uuid>,
+    pub restarted_game_id: Option<Uuid>,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -192,6 +193,7 @@ pub struct PublicGame {
     pub is_finished: bool,
     pub finished_at: Option<NaiveDateTime>,
     pub chat_id: Option<Uuid>,
+    pub restarted_game_id: Option<Uuid>,
 }
 
 impl Game {
@@ -204,6 +206,7 @@ impl Game {
             is_finished: self.is_finished,
             finished_at: self.finished_at,
             chat_id: self.chat_id,
+            restarted_game_id: self.restarted_game_id,
         }
     }
 }
@@ -341,7 +344,7 @@ pub struct GameLog {
 
 pub type PublicGameLog = GameLog;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RenderedGameLog {
     game_log: PublicGameLog,
     html: String,
@@ -349,9 +352,8 @@ pub struct RenderedGameLog {
 
 impl GameLog {
     fn render(&self, players: &[markup::Player]) -> Result<String> {
-        let (parsed, _) = markup::from_string(&self.body).chain_err(
-            || "error parsing log body",
-        )?;
+        let (parsed, _) = markup::from_string(&self.body)
+            .chain_err(|| "error parsing log body")?;
         Ok(markup::html(&markup::transform(&parsed, players)))
     }
 

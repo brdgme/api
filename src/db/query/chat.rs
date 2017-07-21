@@ -55,9 +55,10 @@ pub fn create_message(
 pub fn find(id: &Uuid, conn: &PgConnection) -> Result<Chat> {
     use db::schema::chats;
 
-    chats::table.find(id).get_result(conn).chain_err(
-        || "error finding chat",
-    )
+    chats::table
+        .find(id)
+        .get_result(conn)
+        .chain_err(|| "error finding chat")
 }
 
 pub fn find_users_by_chat(chat_id: &Uuid, conn: &PgConnection) -> Result<Vec<ChatUser>> {

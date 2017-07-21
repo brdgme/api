@@ -64,6 +64,7 @@ table! {
         finished_at -> Nullable<Timestamp>,
         game_state -> Text,
         chat_id -> Nullable<Uuid>,
+        restarted_game_id -> Nullable<Uuid>,
     }
 }
 

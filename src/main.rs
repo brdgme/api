@@ -52,11 +52,11 @@ use std::thread;
 use std::sync::Mutex;
 
 fn main() {
-    let (game_updater, game_update_tx) = websocket::GameUpdater::new();
-    thread::spawn(move || game_updater.run());
+    let (pub_queue, pub_queue_tx) = websocket::PubQueue::new();
+    thread::spawn(move || pub_queue.run());
 
     rocket::ignite()
-        .manage(Mutex::new(game_update_tx))
+        .manage(Mutex::new(pub_queue_tx))
         .mount(
             "/game",
             routes![
@@ -66,6 +66,7 @@ fn main() {
                 controller::game::undo,
                 controller::game::mark_read,
                 controller::game::concede,
+                controller::game::restart,
             ],
         )
         .mount(
