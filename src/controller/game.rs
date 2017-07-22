@@ -115,7 +115,10 @@ pub fn create(
     Ok(CORS(Json(game_extended_to_show_response(
         player,
         &game_extended,
-        player.and_then(|p| player_renders.get(p.position as usize)),
+        player
+            .and_then(|p| player_renders.get(p.position as usize))
+            .map(|render| render.to_owned().into())
+            .as_ref(),
         conn,
     )?)))
 }
@@ -156,7 +159,7 @@ fn game_status_values(status: &Status) -> StatusValues {
 #[derive(Serialize, Clone)]
 pub struct ShowResponse {
     pub game: models::PublicGame,
-    pub pub_state: String,
+    pub state: String,
     pub game_version: models::PublicGameVersion,
     pub game_type: models::PublicGameType,
     pub game_player: Option<models::PublicGamePlayer>,
@@ -191,24 +194,17 @@ pub fn show(id: UuidParam, user: Option<models::User>) -> Result<CORS<Json<ShowR
 fn game_extended_to_show_response(
     game_player: Option<&models::GamePlayer>,
     game_extended: &query::GameExtended,
-    render: Option<&cli::Render>,
+    render: Option<&game_client::RenderResponse>,
     conn: &PgConnection,
 ) -> Result<ShowResponse> {
     let public = game_extended.clone().into_public();
-    let render: Cow<cli::Render> = match render {
+    let render: Cow<game_client::RenderResponse> = match render {
         Some(r) => Cow::Borrowed(r),
-        None => {
-            match game_client::request(
-                &game_extended.game_version.uri,
-                &cli::Request::Render {
-                    player: game_player.map(|gp| gp.position as usize),
-                    game: game_extended.game.game_state.to_owned(),
-                },
-            )? {
-                cli::Response::Render { render } => Cow::Owned(render),
-                _ => bail!("invalid render response"),
-            }
-        }
+        None => Cow::Owned(game_client::render(
+            &game_extended.game_version.uri,
+            game_extended.game.game_state.to_owned(),
+            game_player.map(|gp| gp.position as usize),
+        )?),
     };
 
     let (nodes, _) = markup::from_string(&render.render)
@@ -223,7 +219,7 @@ fn game_extended_to_show_response(
     Ok(ShowResponse {
         game_player: game_player.map(|gp| gp.to_owned().into_public()),
         game: public.game,
-        pub_state: render.pub_state.to_owned(),
+        state: render.state.to_owned(),
         game_version: public.game_version,
         game_type: public.game_type,
         game_players: public.game_players,
@@ -358,7 +354,9 @@ pub fn command(
         Ok(CORS(Json(game_extended_to_show_response(
             gp,
             &game_extended,
-            gp.and_then(|gp| player_renders.get(gp.position as usize)),
+            gp.and_then(|gp| player_renders.get(gp.position as usize))
+                .map(|render| render.clone().into())
+                .as_ref(),
             conn,
         )?)))
     })
@@ -470,7 +468,9 @@ pub fn undo(
         Ok(CORS(Json(game_extended_to_show_response(
             gp,
             &game_extended,
-            gp.and_then(|gp| player_renders.get(gp.position as usize)),
+            gp.and_then(|gp| player_renders.get(gp.position as usize))
+                .map(|render| render.clone().into())
+                .as_ref(),
             conn,
         )?)))
     })
@@ -584,7 +584,9 @@ pub fn concede(
         Ok(CORS(Json(game_extended_to_show_response(
             gp,
             &game_extended,
-            gp.and_then(|gp| player_renders.get(gp.position as usize)),
+            gp.and_then(|gp| player_renders.get(gp.position as usize))
+                .map(|render| render.clone().into())
+                .as_ref(),
             conn,
         )?)))
     })
@@ -697,7 +699,10 @@ pub fn restart(
     Ok(CORS(Json(game_extended_to_show_response(
         player,
         &game_extended,
-        player.and_then(|p| player_renders.get(p.position as usize)),
+        player
+            .and_then(|p| player_renders.get(p.position as usize))
+            .map(|render| render.clone().into())
+            .as_ref(),
         conn,
     )?)))
 }

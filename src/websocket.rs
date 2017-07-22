@@ -127,8 +127,8 @@ pub fn enqueue_game_restarted(
 pub fn enqueue_game_update<'a>(
     game: &'a PublicGameExtended,
     game_logs: &[CreatedGameLog],
-    public_render: &cli::Render,
-    player_renders: &[cli::Render],
+    public_render: &cli::PubRender,
+    player_renders: &[cli::PlayerRender],
     user_auth_tokens: &[UserAuthToken],
     pub_queue_tx: &Sender<Message>,
 ) -> Result<()> {
@@ -143,7 +143,7 @@ pub fn enqueue_game_update<'a>(
                 game_version: game.game_version.to_owned(),
                 game_players: game.game_players.to_owned(),
                 game_logs: created_logs_for_player(None, game_logs, &markup_players)?,
-                pub_state: public_render.pub_state.to_owned(),
+                state: public_render.pub_state.to_owned(),
                 html: render::markup_html(&public_render.render, &markup_players)?,
                 command_spec: None,
                 chat: game.chat.to_owned(),
@@ -166,7 +166,7 @@ pub fn enqueue_game_update<'a>(
                 game_logs,
                 &markup_players,
             )?,
-            pub_state: player_render.pub_state.to_owned(),
+            state: player_render.player_state.to_owned(),
             html: render::markup_html(&player_render.render, &markup_players)?,
             command_spec: player_render.command_spec.to_owned(),
             chat: game.chat.to_owned(),
