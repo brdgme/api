@@ -6,7 +6,7 @@ use diesel::pg::PgConnection;
 use chrono::Utc;
 
 use brdgme_cmd::cli;
-use brdgme_game::{Status, Stat};
+use brdgme_game::{Stat, Status};
 use brdgme_game::command::Spec as CommandSpec;
 use brdgme_markup as markup;
 
@@ -15,7 +15,7 @@ use std::borrow::Cow;
 use std::sync::Mutex;
 use std::sync::mpsc::Sender;
 
-use db::{query, models};
+use db::{models, query};
 use errors::*;
 use db::CONN;
 use game_client;
@@ -301,6 +301,11 @@ pub fn command(
                 cli::Response::UserError { message } => bail!(ErrorKind::UserError(message)),
                 _ => bail!("invalid response type"),
             };
+        if !remaining_command.trim().is_empty() {
+            bail!(ErrorKind::UserError(
+                format!("unexpected '{}'", remaining_command)
+            ));
+        }
         let status = game_status_values(&game_response.status);
 
         let updated = query::update_game_command_success(
