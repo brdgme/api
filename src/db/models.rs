@@ -172,6 +172,7 @@ pub struct PublicGameVersionType {
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations)]
 #[belongs_to(GameVersion)]
+#[belongs_to(Chat)]
 pub struct Game {
     pub id: Uuid,
     pub created_at: NaiveDateTime,

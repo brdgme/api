@@ -367,6 +367,36 @@ pub fn command(
     })
 }
 
+#[derive(Deserialize)]
+pub struct ChatRequest {
+    message: String,
+}
+
+#[post("/<id>/chat", data = "<data>")]
+pub fn chat(
+    id: UuidParam,
+    user: models::User,
+    pub_queue_tx: State<Mutex<Sender<websocket::Message>>>,
+    data: Json<ChatRequest>,
+) -> Result<CORS<Json<models::PublicChatMessage>>> {
+    let id = id.into_uuid();
+    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+    let chat_message = conn.transaction::<_, Error, _>(|| {
+        let game = query::find_game(&id, conn)
+            .chain_err(|| "error finding game")?;
+        let chat_id = game.chat_id
+            .ok_or_else::<Error, _>(|| "no chat for game".into())?;
+        let chat_user = query::chat::find_chat_user_by_chat_and_user(&chat_id, &user.id, conn)
+            .chain_err(|| "error finding chat user")?
+            .ok_or_else::<Error, _>(|| {
+                ErrorKind::UserError("you are not in that chat".to_string()).into()
+            })?;
+        query::chat::create_message(chat_user.id, &data.message, conn)
+            .chain_err(|| "error creating chat message")
+    }).chain_err(|| "error committing transaction")?;
+    Ok(CORS(Json(chat_message)))
+}
+
 #[post("/<id>/undo")]
 pub fn undo(
     id: UuidParam,

@@ -70,8 +70,23 @@ pub fn find_users_by_chat(chat_id: &Uuid, conn: &PgConnection) -> Result<Vec<Cha
         .chain_err(|| "error finding chat users for chat")
 }
 
+pub fn find_chat_user_by_chat_and_user(
+    chat_id: &Uuid,
+    user_id: &Uuid,
+    conn: &PgConnection,
+) -> Result<Option<ChatUser>> {
+    use db::schema::chat_users;
+
+    chat_users::table
+        .filter(chat_users::chat_id.eq(chat_id))
+        .filter(chat_users::user_id.eq(user_id))
+        .get_result(conn)
+        .optional()
+        .chain_err(|| "error finding chat users for chat")
+}
+
 pub fn find_messages_by_chat(chat_id: &Uuid, conn: &PgConnection) -> Result<Vec<ChatMessage>> {
-    use db::schema::{chat_users, chat_messages};
+    use db::schema::{chat_messages, chat_users};
 
     chat_messages::table
         .inner_join(chat_users::table)
