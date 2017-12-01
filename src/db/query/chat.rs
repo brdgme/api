@@ -10,8 +10,8 @@ use db::models::*;
 pub fn create(conn: &PgConnection) -> Result<Chat> {
     use db::schema::chats;
 
-    diesel::insert(&NewChat { id: None })
-        .into(chats::table)
+    diesel::insert_into(chats::table)
+        .values(&NewChat { id: None })
         .get_result(conn)
         .chain_err(|| "error creating chat")
 }
@@ -23,16 +23,17 @@ pub fn add_users(chat_id: Uuid, user_ids: &[Uuid], conn: &PgConnection) -> Resul
         return Ok(vec![]);
     }
 
-    diesel::insert(&user_ids
-        .iter()
-        .map(|&user_id| {
-            NewChatUser {
-                chat_id,
-                user_id,
-                last_read_at: None,
-            }
-        })
-        .collect::<Vec<NewChatUser>>()).into(chat_users::table)
+    diesel::insert_into(chat_users::table)
+        .values(&user_ids
+            .iter()
+            .map(|&user_id| {
+                NewChatUser {
+                    chat_id,
+                    user_id,
+                    last_read_at: None,
+                }
+            })
+            .collect::<Vec<NewChatUser>>())
         .get_results(conn)
         .chain_err(|| "error adding users to chat")
 }
@@ -44,10 +45,11 @@ pub fn create_message(
 ) -> Result<ChatMessage> {
     use db::schema::chat_messages;
 
-    diesel::insert(&NewChatMessage {
-        chat_user_id,
-        message,
-    }).into(chat_messages::table)
+    diesel::insert_into(chat_messages::table)
+        .values(&NewChatMessage {
+            chat_user_id,
+            message,
+        })
         .get_result(conn)
         .chain_err(|| "error creating chat message")
 }
@@ -71,7 +73,7 @@ pub fn find_users_by_chat(chat_id: &Uuid, conn: &PgConnection) -> Result<Vec<Cha
 }
 
 pub fn find_messages_by_chat(chat_id: &Uuid, conn: &PgConnection) -> Result<Vec<ChatMessage>> {
-    use db::schema::{chat_users, chat_messages};
+    use db::schema::{chat_messages, chat_users};
 
     chat_messages::table
         .inner_join(chat_users::table)
@@ -142,7 +144,9 @@ mod tests {
     #[test]
     #[ignore]
     fn create_works() {
-        with_db(|conn| { create(conn).expect("expected to create a chat"); });
+        with_db(|conn| {
+            create(conn).expect("expected to create a chat");
+        });
     }
 
     #[test]

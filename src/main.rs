@@ -5,38 +5,36 @@
 #![plugin(rocket_codegen)]
 #![feature(custom_derive)]
 
-extern crate rocket;
-extern crate rocket_contrib;
-extern crate email;
+extern crate chrono;
 #[macro_use]
-extern crate lazy_static;
+extern crate diesel;
+extern crate email;
+extern crate env_logger;
 #[macro_use]
 extern crate error_chain;
-extern crate r2d2;
-extern crate rand;
-extern crate chrono;
+extern crate hyper;
+extern crate hyper_rustls;
+#[macro_use]
+extern crate lazy_static;
 extern crate lettre;
 #[macro_use]
 extern crate log;
-extern crate env_logger;
-extern crate uuid;
-extern crate hyper;
-extern crate hyper_rustls;
+extern crate r2d2;
+extern crate r2d2_diesel;
+extern crate rand;
+extern crate redis;
+extern crate rocket;
+extern crate rocket_contrib;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
-#[macro_use]
-extern crate diesel;
-#[macro_use]
-extern crate diesel_codegen;
-extern crate r2d2_diesel;
 extern crate unicase;
-extern crate redis;
+extern crate uuid;
 
 extern crate brdgme_cmd;
-extern crate brdgme_game;
 extern crate brdgme_color;
+extern crate brdgme_game;
 extern crate brdgme_markup;
 
 mod config;

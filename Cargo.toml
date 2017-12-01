@@ -26,8 +26,7 @@ rocket_contrib = { version = "0.3.0", features = ["json"] }
 email = "0.0.17"
 hyper = "0.10.7"
 hyper-rustls = "0.6.1"
-diesel = { version = "0.14.0", features = ["postgres", "uuid", "chrono", "large-tables"] }
-diesel_codegen = { version = "0.14.0", features = ["postgres"] }
+diesel = { version = "0.99.0", features = ["postgres", "uuid", "chrono", "large-tables"] }
 r2d2-diesel = "0.12.0"
 unicase = "1.4.0"
 redis = "0.8.0"

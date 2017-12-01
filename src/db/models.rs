@@ -352,8 +352,7 @@ pub struct RenderedGameLog {
 
 impl GameLog {
     fn render(&self, players: &[markup::Player]) -> Result<String> {
-        let (parsed, _) = markup::from_string(&self.body)
-            .chain_err(|| "error parsing log body")?;
+        let (parsed, _) = markup::from_string(&self.body).chain_err(|| "error parsing log body")?;
         Ok(markup::html(&markup::transform(&parsed, players)))
     }
 
@@ -507,12 +506,13 @@ mod tests {
     fn insert_user_works() {
         let conn = &*CONN.w.get().unwrap();
         conn.begin_test_transaction().unwrap();
-        diesel::insert(&NewUser {
-            name: "blah",
-            pref_colors: &[&Color::Green.to_string()],
-            login_confirmation: None,
-            login_confirmation_at: None,
-        }).into(schema::users::table)
+        diesel::insert_into(schema::users::table)
+            .values(&NewUser {
+                name: "blah",
+                pref_colors: &[&Color::Green.to_string()],
+                login_confirmation: None,
+                login_confirmation_at: None,
+            })
             .get_result::<User>(conn)
             .expect("Error inserting user");
     }
