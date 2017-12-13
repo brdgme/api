@@ -1,14 +1,15 @@
+use failure::{Error, ResultExt};
+
 use brdgme_markup as markup;
 
 use std::str::FromStr;
 
-use errors::*;
 use db::models::{GamePlayerTypeUser, PublicGamePlayerTypeUser};
 use db::color;
 
 pub fn public_game_players_to_markup_players(
     game_players: &[PublicGamePlayerTypeUser],
-) -> Result<Vec<markup::Player>> {
+) -> Result<Vec<markup::Player>, Error> {
     game_players
         .iter()
         .map(|gpu| {
@@ -22,17 +23,17 @@ pub fn public_game_players_to_markup_players(
 
 pub fn game_players_to_markup_players(
     game_players: &[GamePlayerTypeUser],
-) -> Result<Vec<markup::Player>> {
+) -> Result<Vec<markup::Player>, Error> {
     public_game_players_to_markup_players(&game_players
         .iter()
         .map(|gptu| gptu.to_owned().into_public())
         .collect::<Vec<PublicGamePlayerTypeUser>>())
 }
 
-pub fn markup_html(template: &str, players: &[markup::Player]) -> Result<String> {
+pub fn markup_html(template: &str, players: &[markup::Player]) -> Result<String, Error> {
     Ok(markup::html(&markup::transform(
         &markup::from_string(template)
-            .chain_err(|| "failed to parse template")?
+            .context("failed to parse template")?
             .0,
         players,
     )))

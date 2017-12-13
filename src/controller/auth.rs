@@ -1,15 +1,15 @@
-use rocket::request::{self, Request, FromRequest};
+use rocket::request::{self, FromRequest, Request};
 use rocket_contrib::Json;
 use rocket::http::Status;
 use rocket::http::hyper::header::Basic;
 use rocket::Outcome;
 use lettre::email::EmailBuilder;
 use uuid::Uuid;
+use failure::{Error, ResultExt};
 
 use std::str::FromStr;
 
-use errors::*;
-use db::{CONN, query};
+use db::{query, CONN};
 use db::models::*;
 use mail;
 use controller::CORS;
@@ -20,26 +20,27 @@ pub struct CreateForm {
 }
 
 #[post("/", data = "<data>")]
-pub fn create(data: Json<CreateForm>) -> Result<CORS<()>> {
+pub fn create(data: Json<CreateForm>) -> Result<CORS<()>, Error> {
     let create_email = data.into_inner().email;
-    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
-    let confirmation = query::user_login_request(&create_email, conn)
-        .chain_err(|| "unable to request user login")?;
+    let conn = &*CONN.w.get().context("unable to get connection")?;
+    let confirmation =
+        query::user_login_request(&create_email, conn).context("unable to request user login")?;
 
-    mail::send(
-        EmailBuilder::new()
-            .to(create_email.as_ref())
-            .from("play@brdg.me")
-            .subject("brdg.me login confirmation")
-            .html(&mail::html_layout(&format!(
-                "Your brdg.me confirmation is <b>{}</b>
+    mail::send(EmailBuilder::new()
+        .to(create_email.as_ref())
+        .from("play@brdg.me")
+        .subject("brdg.me login confirmation")
+        .html(&mail::html_layout(&format!(
+            "Your brdg.me confirmation is <b>{}</b>
 
 This confirmation will expire in 30 minutes if not used.",
-                confirmation
-            )))
-            .build()
-            .chain_err(|| "unable to create login confirmation email")?,
-    ).chain_err(|| "unable to send login confirmation email")?;
+            confirmation
+        )))
+        .build()
+        .context("unable to create login confirmation email")?)
+        .context({
+        "unable to send login confirmation email"
+    })?;
 
     Ok(CORS(()))
 }
@@ -51,14 +52,15 @@ pub struct ConfirmRequest {
 }
 
 #[post("/confirm", data = "<data>")]
-pub fn confirm(data: Json<ConfirmRequest>) -> Result<CORS<Json<String>>> {
+pub fn confirm(data: Json<ConfirmRequest>) -> Result<CORS<Json<String>>, Error> {
     let data = data.into_inner();
-    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+    let conn = &*CONN.w.get().context("unable to get connection")?;
 
     match query::user_login_confirm(&data.email, &data.code, conn)
-        .chain_err(|| "unable to confirm login")? {
+        .context("unable to confirm login")?
+    {
         Some(token) => Ok(CORS(Json(token.id.to_string()))),
-        None => Err("unable to confirm login".into()),
+        None => Err(format_err!("unable to confirm login")),
     }
 }
 
@@ -71,14 +73,14 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
             None => {
                 return Outcome::Failure((
                     Status::Unauthorized,
-                    "missing Authorization header".into(),
+                    format_err!("missing Authorization header"),
                 ))
             }
         };
         if !auth_header.starts_with("Basic ") {
             return Outcome::Failure((
                 Status::Unauthorized,
-                "expected Basic Authorization header".into(),
+                format_err!("expected Basic Authorization header"),
             ));
         }
         let auth = match Basic::from_str(&auth_header[6..]) {
@@ -86,7 +88,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
             Err(e) => {
                 return Outcome::Failure((
                     Status::Unauthorized,
-                    "invalid Authorization header".into(),
+                    format_err!("invalid Authorization header"),
                 ))
             }
         };
@@ -95,7 +97,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
             Err(_) => {
                 return Outcome::Failure((
                     Status::Unauthorized,
-                    "Authorization password not in valid format".into(),
+                    format_err!("Authorization password not in valid format"),
                 ))
             }
         };
@@ -104,14 +106,14 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
             Err(_) => {
                 return Outcome::Failure((
                     Status::InternalServerError,
-                    "error getting connection".into(),
+                    format_err!("error getting connection"),
                 ))
             }
         };
 
         match query::authenticate(&token, conn) {
             Ok(Some(user)) => Outcome::Success(user),
-            _ => Outcome::Failure((Status::Unauthorized, "invalid credentials".into())),
+            _ => Outcome::Failure((Status::Unauthorized, format_err!("invalid credentials"))),
         }
     }
 }

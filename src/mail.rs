@@ -3,34 +3,30 @@ use lettre::email::SendableEmail;
 use lettre::transport::EmailTransport;
 use lettre::transport::file::FileEmailTransport;
 use lettre::transport::smtp::{SmtpTransportBuilder, SUBMISSION_PORT};
+use failure::{Error, ResultExt};
 
 use std::env::temp_dir;
 
-use config::{CONFIG, Mail};
-use errors::*;
+use config::{Mail, CONFIG};
 
-pub fn send<T: SendableEmail>(email: T) -> Result<()> {
+pub fn send<T: SendableEmail>(email: T) -> Result<(), Error> {
     match CONFIG.mail {
-        Mail::File => {
-            FileEmailTransport::new(temp_dir())
-                .send(email)
-                .map(|_| ())
-                .chain_err(|| "unable to send email")
-        }
+        Mail::File => Ok(FileEmailTransport::new(temp_dir())
+            .send(email)
+            .map(|_| ())
+            .context("unable to send email")?),
         Mail::Smtp {
             ref addr,
             ref user,
             ref pass,
-        } => {
-            SmtpTransportBuilder::new((addr.as_ref(), SUBMISSION_PORT))
-                .chain_err(|| "could not initialise SMTP transport")?
-                .encrypt()
-                .credentials(user, pass)
-                .build()
-                .send(email)
-                .map(|_| ())
-                .chain_err(|| "unable to send email")
-        }
+        } => Ok(SmtpTransportBuilder::new((addr.as_ref(), SUBMISSION_PORT))
+            .context("could not initialise SMTP transport")?
+            .encrypt()
+            .credentials(user, pass)
+            .build()
+            .send(email)
+            .map(|_| ())
+            .context("unable to send email")?),
     }
 }
 

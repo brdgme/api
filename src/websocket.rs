@@ -1,16 +1,16 @@
 use redis::{self, Client};
 use serde_json;
 use uuid::Uuid;
+use failure::{Error, ResultExt};
 
 use brdgme_cmd::cli;
 use brdgme_markup as markup;
 
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{channel, Receiver, Sender};
 
-use errors::*;
 use config::CONFIG;
 use db::models::*;
-use db::query::{PublicGameExtended, CreatedGameLog};
+use db::query::{CreatedGameLog, PublicGameExtended};
 use render;
 use controller::game::ShowResponse;
 
@@ -18,8 +18,8 @@ lazy_static! {
     pub static ref CLIENT: Client = connect().unwrap();
 }
 
-pub fn connect() -> Result<Client> {
-    Client::open(CONFIG.redis_url.as_ref()).chain_err(|| "unable to open client")
+pub fn connect() -> Result<Client, Error> {
+    Ok(Client::open(CONFIG.redis_url.as_ref()).context("unable to open client")?)
 }
 
 pub struct Message {
@@ -46,10 +46,10 @@ impl PubQueue {
         (PubQueue { rx }, tx)
     }
 
-    pub fn run(&self) -> Result<()> {
+    pub fn run(&self) -> Result<(), Error> {
         let conn = CLIENT
             .get_connection()
-            .chain_err(|| "unable to get Redis connection from client")?;
+            .context("unable to get Redis connection from client")?;
         loop {
             match self.rx.recv() {
                 Ok(message) => {
@@ -77,11 +77,11 @@ fn created_logs_for_player(
     player_id: Option<Uuid>,
     logs: &[CreatedGameLog],
     players: &[markup::Player],
-) -> Result<Vec<RenderedGameLog>> {
+) -> Result<Vec<RenderedGameLog>, Error> {
     logs.iter()
         .filter(|gl| {
-            gl.game_log.is_public ||
-                player_id
+            gl.game_log.is_public
+                || player_id
                     .and_then(|p_id| gl.targets.iter().find(|t| t.game_player_id == p_id))
                     .is_some()
         })
@@ -102,7 +102,7 @@ pub fn enqueue_game_restarted(
     restarted_game_id: &Uuid,
     user_auth_tokens: &[UserAuthToken],
     pub_queue_tx: &Sender<Message>,
-) -> Result<()> {
+) -> Result<(), Error> {
     let message = MessageKind::GameRestarted {
         game_id: game_id.to_owned(),
         restarted_game_id: restarted_game_id.to_owned(),
@@ -112,14 +112,14 @@ pub fn enqueue_game_restarted(
             channel: game_channel(game_id),
             payload: message.clone(),
         })
-        .chain_err(|| "error enqueuing public game restarted message")?;
+        .context("error enqueuing public game restarted message")?;
     for uat in user_auth_tokens {
         pub_queue_tx
             .send(Message {
                 channel: user_channel(&uat.id),
                 payload: message.clone(),
             })
-            .chain_err(|| "error enqueuing user game restarted message")?;
+            .context("error enqueuing user game restarted message")?;
     }
     Ok(())
 }
@@ -131,7 +131,7 @@ pub fn enqueue_game_update<'a>(
     player_renders: &[cli::PlayerRender],
     user_auth_tokens: &[UserAuthToken],
     pub_queue_tx: &Sender<Message>,
-) -> Result<()> {
+) -> Result<(), Error> {
     let markup_players = render::public_game_players_to_markup_players(&game.game_players)?;
     pub_queue_tx
         .send(Message {
@@ -149,7 +149,7 @@ pub fn enqueue_game_update<'a>(
                 chat: game.chat.to_owned(),
             }),
         })
-        .chain_err(|| "error enqueuing public game update")?;
+        .context("error enqueuing public game update")?;
     for gp in &game.game_players {
         let player_render = match player_renders.get(gp.game_player.position as usize) {
             Some(pr) => pr,
@@ -178,7 +178,7 @@ pub fn enqueue_game_update<'a>(
                         channel: user_channel(&uat.id),
                         payload: MessageKind::GameUpdate(player_message.clone()),
                     })
-                    .chain_err(|| "error enqueuing player game update")?;
+                    .context("error enqueuing player game update")?;
             }
         }
     }

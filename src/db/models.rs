@@ -1,10 +1,10 @@
 use uuid::Uuid;
 use chrono::NaiveDateTime;
+use failure::{Error, ResultExt};
 
 use brdgme_markup as markup;
 
 use db::schema::*;
-use errors::*;
 
 #[derive(Debug, PartialEq, Clone, Queryable, Identifiable, Associations, Serialize, Deserialize)]
 pub struct User {
@@ -351,12 +351,12 @@ pub struct RenderedGameLog {
 }
 
 impl GameLog {
-    fn render(&self, players: &[markup::Player]) -> Result<String> {
-        let (parsed, _) = markup::from_string(&self.body).chain_err(|| "error parsing log body")?;
+    fn render(&self, players: &[markup::Player]) -> Result<String, Error> {
+        let (parsed, _) = markup::from_string(&self.body).context("error parsing log body")?;
         Ok(markup::html(&markup::transform(&parsed, players)))
     }
 
-    pub fn into_rendered(self, players: &[markup::Player]) -> Result<RenderedGameLog> {
+    pub fn into_rendered(self, players: &[markup::Player]) -> Result<RenderedGameLog, Error> {
         let html = self.render(players)?;
         Ok(RenderedGameLog {
             game_log: self,

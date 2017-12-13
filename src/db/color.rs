@@ -1,11 +1,10 @@
 use rand::{self, Rng};
+use failure::Error;
 
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use brdgme_color;
-
-use errors::*;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Color {
@@ -29,7 +28,7 @@ pub static COLORS: &'static [Color] = &[
 ];
 
 impl Color {
-    pub fn from_strings(from: &[String]) -> Result<Vec<Color>> {
+    pub fn from_strings(from: &[String]) -> Result<Vec<Color>, Error> {
         let mut cols = vec![];
         for s in from {
             cols.push(Color::from_str(s)?)
@@ -69,7 +68,7 @@ impl ToString for Color {
 impl FromStr for Color {
     type Err = Error;
 
-    fn from_str(s: &str) -> Result<Self> {
+    fn from_str(s: &str) -> Result<Self, Error> {
         Ok(match s {
             "Green" => Color::Green,
             "Red" => Color::Red,

@@ -4,6 +4,7 @@ use uuid::Uuid;
 use diesel::Connection;
 use diesel::pg::PgConnection;
 use chrono::Utc;
+use failure::{Error, ResultExt};
 
 use brdgme_cmd::cli;
 use brdgme_game::{Stat, Status};
@@ -16,12 +17,12 @@ use std::sync::Mutex;
 use std::sync::mpsc::Sender;
 
 use db::{models, query};
-use errors::*;
 use db::CONN;
 use game_client;
 use render;
 use controller::{UuidParam, CORS};
 use websocket;
+use errors::ControllerError;
 
 #[derive(Deserialize)]
 pub struct CreateRequest {
@@ -35,10 +36,10 @@ pub fn create(
     data: Json<CreateRequest>,
     user: models::User,
     pub_queue_tx: State<Mutex<Sender<websocket::Message>>>,
-) -> Result<CORS<Json<ShowResponse>>> {
+) -> Result<CORS<Json<ShowResponse>>, ControllerError> {
     let user_id = user.id;
     let data = data.into_inner();
-    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+    let conn = &*CONN.w.get().context("unable to get connection")?;
 
     let (created_game, created_logs, public_render, player_renders, user_ids) =
         conn.transaction::<_, Error, _>(move || {
@@ -46,8 +47,8 @@ pub fn create(
             let opponent_emails = data.opponent_emails.unwrap_or_else(|| vec![]);
             let player_count: usize = 1 + opponent_ids.len() + opponent_emails.len();
             let game_version = query::find_game_version(&data.game_version_id, conn)
-                .chain_err(|| "error finding game version")?
-                .ok_or_else::<Error, _>(|| "could not find game version".into())?;
+                .context("error finding game version")?
+                .ok_or_else::<Error, _>(|| format_err!("could not find game version"))?;
 
             let resp = game_client::request(
                 &game_version.uri,
@@ -82,9 +83,9 @@ pub fn create(
                     chat_id: None,
                 },
                 conn,
-            ).chain_err(|| "unable to create game")?;
+            ).context("unable to create game")?;
             let created_logs = query::create_game_logs_from_cli(&created_game.game.id, logs, conn)
-                .chain_err(|| "unable to create game logs")?;
+                .context("unable to create game logs")?;
             let mut user_ids = opponent_ids.clone();
             user_ids.push(user_id);
             Ok((
@@ -94,9 +95,9 @@ pub fn create(
                 player_renders,
                 user_ids,
             ))
-        }).chain_err(|| "error committing transaction")?;
+        }).context("error committing transaction")?;
     let game_extended = query::find_game_extended(&created_game.game.id, conn)
-        .chain_err(|| "unable to get extended game")?;
+        .context("unable to get extended game")?;
     let player = created_game.players.iter().find(|p| p.user_id == user_id);
     websocket::enqueue_game_update(
         &game_extended.clone().into_public(),
@@ -107,9 +108,7 @@ pub fn create(
         &pub_queue_tx
             .inner()
             .lock()
-            .map_err::<Error, _>(|e| {
-                ErrorKind::Msg(format!("unable to get lock on pub_queue_tx: {}", e)).into()
-            })?
+            .map_err::<Error, _>(|e| format_err!("unable to get lock on pub_queue_tx: {}", e))?
             .clone(),
     )?;
     Ok(CORS(Json(game_extended_to_show_response(
@@ -171,9 +170,12 @@ pub struct ShowResponse {
 }
 
 #[get("/<id>")]
-pub fn show(id: UuidParam, user: Option<models::User>) -> Result<CORS<Json<ShowResponse>>> {
+pub fn show(
+    id: UuidParam,
+    user: Option<models::User>,
+) -> Result<CORS<Json<ShowResponse>>, ControllerError> {
     let id = id.into_uuid();
-    let conn = &*CONN.r.get().chain_err(|| "error getting connection")?;
+    let conn = &*CONN.r.get().context("error getting connection")?;
 
     let game_extended = query::find_game_extended(&id, conn)?;
     let game_player: Option<&models::GamePlayer> = user.and_then(|u| {
@@ -196,7 +198,7 @@ fn game_extended_to_show_response(
     game_extended: &query::GameExtended,
     render: Option<&game_client::RenderResponse>,
     conn: &PgConnection,
-) -> Result<ShowResponse> {
+) -> Result<ShowResponse, ControllerError> {
     let public = game_extended.clone().into_public();
     let render: Cow<game_client::RenderResponse> = match render {
         Some(r) => Cow::Borrowed(r),
@@ -207,8 +209,7 @@ fn game_extended_to_show_response(
         )?),
     };
 
-    let (nodes, _) = markup::from_string(&render.render)
-        .chain_err(|| "error parsing render markup")?;
+    let (nodes, _) = markup::from_string(&render.render).context("error parsing render markup")?;
 
     let markup_players = render::game_players_to_markup_players(&game_extended.game_players)?;
     let game_logs = match game_player {
@@ -227,7 +228,7 @@ fn game_extended_to_show_response(
         game_logs: game_logs
             .into_iter()
             .map(|gl| gl.into_rendered(&markup_players))
-            .collect::<Result<Vec<models::RenderedGameLog>>>()?,
+            .collect::<Result<Vec<models::RenderedGameLog>, Error>>()?,
         command_spec: render.command_spec.to_owned(),
         chat: public.chat,
     })
@@ -244,27 +245,26 @@ pub fn command(
     user: models::User,
     pub_queue_tx: State<Mutex<Sender<websocket::Message>>>,
     data: Json<CommandRequest>,
-) -> Result<CORS<Json<ShowResponse>>> {
+) -> Result<CORS<Json<ShowResponse>>, ControllerError> {
     let id = id.into_uuid();
-    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
-    conn.transaction::<_, Error, _>(|| {
-
+    let conn = &*CONN.w.get().context("unable to get connection")?;
+    conn.transaction::<_, ControllerError, _>(|| {
         let (game, game_version) = query::find_game_with_version(&id, conn)
-            .chain_err(|| "error finding game")?
-            .ok_or_else::<Error, _>(|| {
-                ErrorKind::UserError("game does not exist".to_string()).into()
+            .context("error finding game")?
+            .ok_or_else::<ControllerError, _>(|| {
+                ControllerError::bad_request("game does not exist")
             })?;
         if game.is_finished {
-            bail!(ErrorKind::UserError("game is already finished".to_string()));
+            return Err(ControllerError::bad_request("game is already finished"));
         }
 
         let players: Vec<(models::GamePlayer, models::User)> =
             query::find_game_players_with_user_by_game(&id, conn)
-                .chain_err(|| "error finding game players")?;
+                .context("error finding game players")?;
         let player: &models::GamePlayer = &players
             .iter()
             .find(|&&(ref p, _)| p.user_id == user.id)
-            .ok_or_else::<Error, _>(|| "you are not a player in this game".into())?
+            .ok_or_else::<Error, _>(|| format_err!("you are not a player in this game"))?
             .0;
         let position = player.position;
 
@@ -298,13 +298,16 @@ pub fn command(
                     public_render,
                     player_renders,
                 ),
-                cli::Response::UserError { message } => bail!(ErrorKind::UserError(message)),
-                _ => bail!("invalid response type"),
+                cli::Response::UserError { message } => {
+                    return Err(ControllerError::bad_request(message))
+                }
+                _ => Err(format_err!("invalid response type"))?,
             };
         if !remaining_command.trim().is_empty() {
-            bail!(ErrorKind::UserError(
-                format!("unexpected '{}'", remaining_command)
-            ));
+            return Err(ControllerError::bad_request(format!(
+                "unexpected '{}'",
+                remaining_command
+            )));
         }
         let status = game_status_values(&game_response.status);
 
@@ -326,12 +329,12 @@ pub fn command(
             &status.placings,
             &game_response.points,
             conn,
-        ).chain_err(|| "error updating game")?;
+        ).context("error updating game")?;
 
         let created_logs = query::create_game_logs_from_cli(&id, logs, conn)
-            .chain_err(|| "unable to create game logs")?;
-        let game_extended = query::find_game_extended(&id, conn)
-            .chain_err(|| "unable to get extended game")?;
+            .context("unable to create game logs")?;
+        let game_extended =
+            query::find_game_extended(&id, conn).context("unable to get extended game")?;
         let user_ids: Vec<Uuid> = game_extended
             .game_players
             .iter()
@@ -346,9 +349,7 @@ pub fn command(
             &pub_queue_tx
                 .inner()
                 .lock()
-                .map_err::<Error, _>(|e| {
-                    ErrorKind::Msg(format!("unable to get lock on pub_queue_tx: {}", e)).into()
-                })?
+                .map_err::<Error, _>(|e| format_err!("unable to get lock on pub_queue_tx: {}", e))?
                 .clone(),
         )?;
         let gp = game_extended
@@ -372,32 +373,31 @@ pub fn undo(
     id: UuidParam,
     user: models::User,
     pub_queue_tx: State<Mutex<Sender<websocket::Message>>>,
-) -> Result<CORS<Json<ShowResponse>>> {
+) -> Result<CORS<Json<ShowResponse>>, ControllerError> {
     let id = id.into_uuid();
-    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+    let conn = &*CONN.w.get().context("unable to get connection")?;
 
-    conn.transaction::<_, Error, _>(|| {
-
+    conn.transaction::<_, ControllerError, _>(|| {
         let (game, game_version) = query::find_game_with_version(&id, conn)
-            .chain_err(|| "error finding game")?
-            .ok_or_else::<Error, _>(|| {
-                ErrorKind::UserError("game does not exist".to_string()).into()
+            .context("error finding game")?
+            .ok_or_else::<ControllerError, _>(|| {
+                ControllerError::bad_request("game does not exist")
             })?;
         if game.is_finished {
-            bail!(ErrorKind::UserError("game is already finished".to_string()));
+            return Err(ControllerError::bad_request("game is already finished"));
         }
 
         let player = query::find_game_player_by_user_and_game(&user.id, &id, conn)
-            .chain_err(|| "error finding game player")?
-            .ok_or_else::<Error, _>(|| {
-                ErrorKind::UserError("you aren't a player in this game".to_string()).into()
+            .context("error finding game player")?
+            .ok_or_else::<ControllerError, _>(|| {
+                ControllerError::bad_request("you aren't a player in this game")
             })?;
 
         let undo_state = player
             .undo_game_state
             .clone()
-            .ok_or_else::<Error, _>(|| {
-                ErrorKind::UserError("you can't undo at the moment".to_string()).into()
+            .ok_or_else::<ControllerError, _>(|| {
+                ControllerError::bad_request("you can't undo at the moment")
             })?;
 
         let (game_response, public_render, player_renders) = match game_client::request(
@@ -411,7 +411,7 @@ pub fn undo(
                 public_render,
                 player_renders,
             } => (game, public_render, player_renders),
-            _ => bail!("invalid response type"),
+            _ => Err(format_err!("invalid response type"))?,
         };
         let status = game_status_values(&game_response.status);
         let updated = query::update_game_command_success(
@@ -428,9 +428,9 @@ pub fn undo(
             &status.placings,
             &game_response.points,
             conn,
-        ).chain_err(|| "error updating game")?;
+        ).context("error updating game")?;
         query::player_cannot_undo_set_undo_game_state(&id, conn)
-            .chain_err(|| "unable to clear undo_game_state for all players")?;
+            .context("unable to clear undo_game_state for all players")?;
         let created_log = query::create_game_log(
             &models::NewGameLog {
                 game_id: id,
@@ -443,9 +443,9 @@ pub fn undo(
             },
             &[],
             conn,
-        ).chain_err(|| "unable to create undo game log")?;
-        let game_extended = query::find_game_extended(&id, conn)
-            .chain_err(|| "unable to get extended game")?;
+        ).context("unable to create undo game log")?;
+        let game_extended =
+            query::find_game_extended(&id, conn).context("unable to get extended game")?;
         let user_ids: Vec<Uuid> = game_extended
             .game_players
             .iter()
@@ -460,9 +460,7 @@ pub fn undo(
             &pub_queue_tx
                 .inner()
                 .lock()
-                .map_err::<Error, _>(|e| {
-                    ErrorKind::Msg(format!("unable to get lock on pub_queue_tx: {}", e)).into()
-                })?
+                .map_err::<Error, _>(|e| format_err!("unable to get lock on pub_queue_tx: {}", e))?
                 .clone(),
         )?;
         let gp = game_extended
@@ -485,14 +483,14 @@ pub fn undo(
 pub fn mark_read(
     id: UuidParam,
     user: models::User,
-) -> Result<CORS<Json<Option<models::PublicGamePlayer>>>> {
+) -> Result<CORS<Json<Option<models::PublicGamePlayer>>>, ControllerError> {
     let id = id.into_uuid();
-    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+    let conn = &*CONN.w.get().context("unable to get connection")?;
 
-    conn.transaction::<_, Error, _>(|| {
+    conn.transaction::<_, ControllerError, _>(|| {
         Ok(CORS(Json(
             query::mark_game_read(&id, &user.id, conn)
-                .chain_err(|| "error marking game read")?
+                .context("error marking game read")?
                 .map(|gp| gp.into_public()),
         )))
     })
@@ -503,36 +501,35 @@ pub fn concede(
     id: UuidParam,
     user: models::User,
     pub_queue_tx: State<Mutex<Sender<websocket::Message>>>,
-) -> Result<CORS<Json<ShowResponse>>> {
+) -> Result<CORS<Json<ShowResponse>>, ControllerError> {
     let id = id.into_uuid();
-    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+    let conn = &*CONN.w.get().context("unable to get connection")?;
 
-    conn.transaction::<_, Error, _>(|| {
+    Ok(conn.transaction::<_, ControllerError, _>(|| {
         let (game, game_version) = query::find_game_with_version(&id, conn)
-            .chain_err(|| "error finding game")?
-            .ok_or_else::<Error, _>(|| {
-                ErrorKind::UserError("game does not exist".to_string()).into()
+            .context("error finding game")?
+            .ok_or_else::<ControllerError, _>(|| {
+                ControllerError::bad_request("game does not exist")
             })?;
         if game.is_finished {
-            bail!(ErrorKind::UserError("game is already finished".to_string()));
+            return Err(ControllerError::bad_request("game is already finished"));
         }
 
         let player_count = query::find_player_count_by_game(&id, conn)
-            .chain_err(|| "error finding player count for game")?;
+            .context("error finding player count for game")?;
         if player_count > 2 {
-            bail!(ErrorKind::UserError(
-                "cannot concede games with more than two players".to_string(),
+            return Err(ControllerError::bad_request(
+                "cannot concede games with more than two players",
             ));
         }
 
         let player = query::find_game_player_by_user_and_game(&user.id, &id, conn)
-            .chain_err(|| "error finding game player")?
-            .ok_or_else::<Error, _>(|| {
-                ErrorKind::UserError("you aren't a player in this game".to_string()).into()
+            .context("error finding game player")?
+            .ok_or_else::<ControllerError, _>(|| {
+                ControllerError::bad_request("you aren't a player in this game")
             })?;
 
-        let updated = query::concede_game(&id, &player.id, conn)
-            .chain_err(|| "error conceding game")?;
+        let updated = query::concede_game(&id, &player.id, conn).context("error conceding game")?;
 
         let (public_render, player_renders) = match game_client::request(
             &game_version.uri,
@@ -545,7 +542,7 @@ pub fn concede(
                 player_renders,
                 ..
             } => (public_render, player_renders),
-            _ => bail!("invalid response type"),
+            _ => return Err(format_err!("invalid response type").into()),
         };
         let created_log = query::create_game_log(
             &models::NewGameLog {
@@ -559,9 +556,9 @@ pub fn concede(
             },
             &[],
             conn,
-        ).chain_err(|| "unable to create concede game log")?;
-        let game_extended = query::find_game_extended(&id, conn)
-            .chain_err(|| "unable to get extended game")?;
+        ).context("unable to create concede game log")?;
+        let game_extended =
+            query::find_game_extended(&id, conn).context("unable to get extended game")?;
         let user_ids: Vec<Uuid> = game_extended
             .game_players
             .iter()
@@ -576,9 +573,7 @@ pub fn concede(
             &pub_queue_tx
                 .inner()
                 .lock()
-                .map_err::<Error, _>(|e| {
-                    ErrorKind::Msg(format!("unable to get lock on pub_queue_tx: {}", e)).into()
-                })?
+                .map_err::<Error, _>(|e| format_err!("unable to get lock on pub_queue_tx: {}", e))?
                 .clone(),
         )?;
         let gp = game_extended
@@ -594,7 +589,7 @@ pub fn concede(
                 .as_ref(),
             conn,
         )?)))
-    })
+    })?)
 }
 
 #[post("/<id>/restart")]
@@ -602,30 +597,32 @@ pub fn restart(
     id: UuidParam,
     user: models::User,
     pub_queue_tx: State<Mutex<Sender<websocket::Message>>>,
-) -> Result<CORS<Json<ShowResponse>>> {
+) -> Result<CORS<Json<ShowResponse>>, ControllerError> {
     let id = id.into_uuid();
     let user_id = user.id;
-    let conn = &*CONN.w.get().chain_err(|| "unable to get connection")?;
+    let conn = &*CONN.w.get().context("unable to get connection")?;
 
     let (created_game, created_logs, public_render, player_renders, user_ids) =
         conn.transaction::<_, Error, _>(move || {
-            let game_extended = query::find_game_extended(&id, conn)
-                .chain_err(|| "could not find game to restart")?;
+            let game_extended =
+                query::find_game_extended(&id, conn).context("could not find game to restart")?;
             let game_player = game_extended
                 .game_players
                 .iter()
                 .find(|gptu| gptu.user.id == user.id)
-                .ok_or_else(|| "you are not a player in this game")?;
+                .ok_or_else(|| format_err!("you are not a player in this game"))?;
             if game_extended.game.restarted_game_id.is_some() {
                 bail!("game has already been restarted");
             }
             let opponent_ids: Vec<Uuid> = game_extended
                 .game_players
                 .iter()
-                .filter_map(|gptu| if gptu.user.id == user.id {
-                    None
-                } else {
-                    Some(gptu.user.id)
+                .filter_map(|gptu| {
+                    if gptu.user.id == user.id {
+                        None
+                    } else {
+                        Some(gptu.user.id)
+                    }
                 })
                 .collect();
             let player_count: usize = 1 + opponent_ids.len();
@@ -663,9 +660,9 @@ pub fn restart(
                     chat_id: None,
                 },
                 conn,
-            ).chain_err(|| "unable to create game")?;
+            ).context("unable to create game")?;
             let created_logs = query::create_game_logs_from_cli(&created_game.game.id, logs, conn)
-                .chain_err(|| "unable to create game logs")?;
+                .context("unable to create game logs")?;
             query::game::update_restarted_game_id(
                 &game_extended.game.id,
                 &created_game.game.id,
@@ -680,16 +677,14 @@ pub fn restart(
                 player_renders,
                 user_ids,
             ))
-        }).chain_err(|| "error committing transaction")?;
+        }).context("error committing transaction")?;
     let game_extended = query::find_game_extended(&created_game.game.id, conn)
-        .chain_err(|| "unable to get extended game")?;
+        .context("unable to get extended game")?;
     let player = created_game.players.iter().find(|p| p.user_id == user_id);
     let tx = pub_queue_tx
         .inner()
         .lock()
-        .map_err::<Error, _>(|e| {
-            ErrorKind::Msg(format!("unable to get lock on pub_queue_tx: {}", e)).into()
-        })?
+        .map_err::<Error, _>(|e| format_err!("unable to get lock on pub_queue_tx: {}", e))?
         .clone();
     let tokens = query::find_valid_user_auth_tokens_for_users(&user_ids, conn)?;
     websocket::enqueue_game_update(

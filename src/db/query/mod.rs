@@ -4,6 +4,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 use rand::{self, Rng};
 use chrono::{Duration, Utc};
+use failure::{Error, ResultExt};
 
 use brdgme_cmd::cli::CliLog;
 
@@ -12,7 +13,6 @@ use std::iter::FromIterator;
 use std::usize::MAX as USIZE_MAX;
 use std::cmp::Ordering;
 
-use errors::*;
 use db::models::*;
 use db::color::{self, Color};
 
@@ -28,9 +28,9 @@ lazy_static! {
     static ref FINISHED_GAME_RELEVANCE: Duration = Duration::days(3);
 }
 
-pub fn create_user_by_name(name: &str, conn: &PgConnection) -> Result<User> {
+pub fn create_user_by_name(name: &str, conn: &PgConnection) -> Result<User, Error> {
     use db::schema::users;
-    diesel::insert_into(users::table)
+    Ok(diesel::insert_into(users::table)
         .values(&NewUser {
             name: name,
             pref_colors: &[],
@@ -38,42 +38,45 @@ pub fn create_user_by_name(name: &str, conn: &PgConnection) -> Result<User> {
             login_confirmation_at: None,
         })
         .get_result(conn)
-        .chain_err(|| "error creating user")
+        .context("error creating user")?)
 }
 
-pub fn find_user(find_id: &Uuid, conn: &PgConnection) -> Result<Option<User>> {
+pub fn find_user(find_id: &Uuid, conn: &PgConnection) -> Result<Option<User>, Error> {
     use db::schema::users;
 
-    users::table
+    Ok(users::table
         .find(find_id)
         .first(conn)
         .optional()
-        .chain_err(|| "error finding user")
+        .context("error finding user")?)
 }
 
 pub fn find_user_by_email(
     by_email: &str,
     conn: &PgConnection,
-) -> Result<Option<(UserEmail, User)>> {
+) -> Result<Option<(UserEmail, User)>, Error> {
     use db::schema::{user_emails, users};
 
-    user_emails::table
+    Ok(user_emails::table
         .filter(user_emails::email.eq(by_email))
         .limit(1)
         .inner_join(users::table)
         .first::<(UserEmail, User)>(conn)
         .optional()
-        .chain_err(|| "error finding user")
+        .context("error finding user")?)
 }
 
-pub fn find_or_create_user_by_email(email: &str, conn: &PgConnection) -> Result<(UserEmail, User)> {
+pub fn find_or_create_user_by_email(
+    email: &str,
+    conn: &PgConnection,
+) -> Result<(UserEmail, User), Error> {
     if let Some(v) = find_user_by_email(email, conn)? {
         return Ok(v);
     }
     create_user_by_email(email, conn)
 }
 
-pub fn create_user_by_email(email: &str, conn: &PgConnection) -> Result<(UserEmail, User)> {
+pub fn create_user_by_email(email: &str, conn: &PgConnection) -> Result<(UserEmail, User), Error> {
     conn.transaction(|| {
         let u = create_user_by_name(email, conn)?;
         let ue = create_user_email(
@@ -88,12 +91,12 @@ pub fn create_user_by_email(email: &str, conn: &PgConnection) -> Result<(UserEma
     })
 }
 
-pub fn create_user_email(ue: &NewUserEmail, conn: &PgConnection) -> Result<UserEmail> {
+pub fn create_user_email(ue: &NewUserEmail, conn: &PgConnection) -> Result<UserEmail, Error> {
     use db::schema::user_emails;
-    diesel::insert_into(user_emails::table)
+    Ok(diesel::insert_into(user_emails::table)
         .values(ue)
         .get_result(conn)
-        .chain_err(|| "error creating user email")
+        .context("error creating user email")?)
 }
 
 fn rand_code() -> String {
@@ -105,7 +108,10 @@ fn rand_code() -> String {
     )
 }
 
-pub fn generate_user_login_confirmation(user_id: &Uuid, conn: &PgConnection) -> Result<String> {
+pub fn generate_user_login_confirmation(
+    user_id: &Uuid,
+    conn: &PgConnection,
+) -> Result<String, Error> {
     use db::schema::users;
 
     let code = rand_code();
@@ -118,7 +124,7 @@ pub fn generate_user_login_confirmation(user_id: &Uuid, conn: &PgConnection) -> 
     Ok(code)
 }
 
-pub fn user_login_request(email: &str, conn: &PgConnection) -> Result<String> {
+pub fn user_login_request(email: &str, conn: &PgConnection) -> Result<String, Error> {
     conn.transaction(|| {
         let (_, user) = find_or_create_user_by_email(email, conn)?;
 
@@ -136,7 +142,7 @@ pub fn user_login_confirm(
     email: &str,
     confirmation: &str,
     conn: &PgConnection,
-) -> Result<Option<UserAuthToken>> {
+) -> Result<Option<UserAuthToken>, Error> {
     let user = match find_user_by_email(email, conn)? {
         Some((_, u)) => u,
         None => return Ok(None),
@@ -153,18 +159,18 @@ pub fn user_login_confirm(
     )
 }
 
-pub fn create_auth_token(for_user_id: &Uuid, conn: &PgConnection) -> Result<UserAuthToken> {
+pub fn create_auth_token(for_user_id: &Uuid, conn: &PgConnection) -> Result<UserAuthToken, Error> {
     use db::schema::user_auth_tokens;
 
-    diesel::insert_into(user_auth_tokens::table)
+    Ok(diesel::insert_into(user_auth_tokens::table)
         .values(&NewUserAuthToken {
             user_id: *for_user_id,
         })
         .get_result::<UserAuthToken>(conn)
-        .chain_err(|| "error creating auth token")
+        .context("error creating auth token")?)
 }
 
-pub fn authenticate(search_token: &Uuid, conn: &PgConnection) -> Result<Option<User>> {
+pub fn authenticate(search_token: &Uuid, conn: &PgConnection) -> Result<Option<User>, Error> {
     use db::schema::{user_auth_tokens, users};
 
     let uat: UserAuthToken = match user_auth_tokens::table
@@ -180,53 +186,53 @@ pub fn authenticate(search_token: &Uuid, conn: &PgConnection) -> Result<Option<U
     Ok(Some(users::table
         .find(uat.user_id)
         .first(conn)
-        .chain_err(|| "error finding user")?))
+        .context("error finding user")?))
 }
 
 pub fn find_valid_user_auth_tokens_for_users(
     user_ids: &[Uuid],
     conn: &PgConnection,
-) -> Result<Vec<UserAuthToken>> {
+) -> Result<Vec<UserAuthToken>, Error> {
     use db::schema::user_auth_tokens;
 
-    user_auth_tokens::table
+    Ok(user_auth_tokens::table
         .filter(user_auth_tokens::user_id.eq_any(user_ids))
         .filter(user_auth_tokens::created_at.gt(Utc::now().naive_utc() - *TOKEN_EXPIRY))
         .get_results(conn)
-        .chain_err(|| "error finding user auth tokens for user")
+        .context("error finding user auth tokens for user")?)
 }
 
-pub fn find_game(id: &Uuid, conn: &PgConnection) -> Result<Game> {
+pub fn find_game(id: &Uuid, conn: &PgConnection) -> Result<Game, Error> {
     use db::schema::games;
 
-    games::table
+    Ok(games::table
         .find(id)
         .first(conn)
-        .chain_err(|| "error finding game")
+        .context("error finding game")?)
 }
 
-pub fn find_game_version(id: &Uuid, conn: &PgConnection) -> Result<Option<GameVersion>> {
+pub fn find_game_version(id: &Uuid, conn: &PgConnection) -> Result<Option<GameVersion>, Error> {
     use db::schema::game_versions;
 
-    game_versions::table
+    Ok(game_versions::table
         .find(id)
         .first(conn)
         .optional()
-        .chain_err(|| "error finding game version")
+        .context("error finding game version")?)
 }
 
 pub fn find_game_with_version(
     id: &Uuid,
     conn: &PgConnection,
-) -> Result<Option<(Game, GameVersion)>> {
+) -> Result<Option<(Game, GameVersion)>, Error> {
     use db::schema::{game_versions, games};
 
-    games::table
+    Ok(games::table
         .find(id)
         .inner_join(game_versions::table)
         .first(conn)
         .optional()
-        .chain_err(|| "error finding game")
+        .context("error finding game")?)
 }
 
 #[derive(Clone)]
@@ -273,18 +279,19 @@ pub struct PublicGameExtended {
     pub chat: Option<chat::PublicChatExtended>,
 }
 
-pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<GameExtended>> {
+pub fn find_active_games_for_user(
+    id: &Uuid,
+    conn: &PgConnection,
+) -> Result<Vec<GameExtended>, Error> {
     use db::schema::{game_players, game_types, game_versions, games};
 
     Ok(games::table
         .inner_join(game_players::table)
         .filter(game_players::user_id.eq(id))
         .filter(
-            games::is_finished.eq(false).or(
-                games::updated_at
-                    .gt(Utc::now().naive_utc() - *FINISHED_GAME_RELEVANCE)
-                    .and(game_players::is_read.eq(false)),
-            ),
+            games::is_finished.eq(false).or(games::updated_at
+                .gt(Utc::now().naive_utc() - *FINISHED_GAME_RELEVANCE)
+                .and(game_players::is_read.eq(false))),
         )
         .get_results::<(Game, GamePlayer)>(conn)?
         .iter()
@@ -306,10 +313,10 @@ pub fn find_active_games_for_user(id: &Uuid, conn: &PgConnection) -> Result<Vec<
                 }),
             })
         })
-        .collect::<Result<Vec<GameExtended>>>()?)
+        .collect::<Result<Vec<GameExtended>, Error>>()?)
 }
 
-pub fn find_game_extended(id: &Uuid, conn: &PgConnection) -> Result<GameExtended> {
+pub fn find_game_extended(id: &Uuid, conn: &PgConnection) -> Result<GameExtended, Error> {
     use db::schema::{game_types, game_versions, games};
 
     let (game, game_version) = games::table
@@ -347,16 +354,19 @@ pub struct CreateGameOpts<'a> {
     pub opponent_emails: &'a [String],
     pub chat_id: Option<Uuid>,
 }
-pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Result<CreatedGame> {
+pub fn create_game_with_users(
+    opts: &CreateGameOpts,
+    conn: &PgConnection,
+) -> Result<CreatedGame, Error> {
     // We get the timestamp for now before logs are created to make sure players can read them.
     let now = Utc::now().naive_utc();
     conn.transaction(|| {
         // Find or create users.
         let creator = find_user(opts.creator_id, conn)
-            .chain_err(|| "could not find creator")?
-            .ok_or_else::<Error, _>(|| "could not find creator".into())?;
+            .context("could not find creator")?
+            .ok_or_else::<Error, _>(|| format_err!("could not find creator"))?;
         let opponents = create_game_users(opts.opponent_ids, opts.opponent_emails, conn)
-            .chain_err(|| "could not create game users")?;
+            .context("could not create game users")?;
         let mut users: Vec<User> = opponents.iter().map(|&(_, ref u)| u.clone()).collect();
         users.push(creator);
 
@@ -368,32 +378,32 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
         let color_prefs = users
             .iter()
             .map(|u| Color::from_strings(&u.pref_colors))
-            .collect::<Result<Vec<Vec<Color>>>>()?;
+            .collect::<Result<Vec<Vec<Color>>, Error>>()?;
         let player_colors = color::choose(&HashSet::from_iter(color::COLORS.iter()), &color_prefs);
 
         // Create game record.
         let mut game_record =
-            create_game(opts.new_game, conn).chain_err(|| "could not create new game")?;
+            create_game(opts.new_game, conn).context("could not create new game")?;
 
         // Create chat if needed
         let chat_id = if let Some(chat_id) = opts.chat_id {
             chat_id
         } else {
-            let chat = chat::create(conn).chain_err(|| "error creating chat for new game")?;
+            let chat = chat::create(conn).context("error creating chat for new game")?;
             chat::add_users(
                 chat.id,
                 users.iter().map(|u| u.id).collect::<Vec<Uuid>>().as_ref(),
                 conn,
-            ).chain_err(|| "error adding users to new chat")?;
+            ).context("error adding users to new chat")?;
             chat.id
         };
         game::update_chat_id(&game_record.id, &chat_id, conn)
-            .chain_err(|| "error updating chat_id for newly created game")?;
+            .context("error updating chat_id for newly created game")?;
         game_record.chat_id = Some(chat_id);
 
         // Find or create game type user records.
         let game_version = find_game_version(&opts.new_game.game_version_id, conn)?
-            .ok_or_else::<Error, _>(|| "could not find game version".into())?;
+            .ok_or_else::<Error, _>(|| format_err!("could not find game version"))?;
         let mut game_type_users: Vec<GameTypeUser> = vec![];
         for user in &users {
             game_type_users.push(find_or_create_game_type_user(
@@ -424,7 +434,7 @@ pub fn create_game_with_users(opts: &CreateGameOpts, conn: &PgConnection) -> Res
                     rating_change: None,
                 },
                 conn,
-            ).chain_err(|| "could not create game player")?);
+            ).context("could not create game player")?);
         }
         Ok(CreatedGame {
             game: game_record,
@@ -438,7 +448,7 @@ pub fn find_or_create_game_type_user(
     game_type_id: &Uuid,
     user_id: &Uuid,
     conn: &PgConnection,
-) -> Result<GameTypeUser> {
+) -> Result<GameTypeUser, Error> {
     if let Some(gtu) = find_game_type_user_by_game_type_and_user(game_type_id, user_id, conn)? {
         return Ok(gtu);
     }
@@ -458,22 +468,25 @@ pub fn find_game_type_user_by_game_type_and_user(
     game_type_id: &Uuid,
     user_id: &Uuid,
     conn: &PgConnection,
-) -> Result<Option<GameTypeUser>> {
+) -> Result<Option<GameTypeUser>, Error> {
     use db::schema::game_type_users;
-    game_type_users::table
+    Ok(game_type_users::table
         .filter(game_type_users::game_type_id.eq(game_type_id))
         .filter(game_type_users::user_id.eq(user_id))
         .get_result(conn)
         .optional()
-        .chain_err(|| "error finding game type user")
+        .context("error finding game type user")?)
 }
 
-pub fn create_game_type_user(gtu: &NewGameTypeUser, conn: &PgConnection) -> Result<GameTypeUser> {
+pub fn create_game_type_user(
+    gtu: &NewGameTypeUser,
+    conn: &PgConnection,
+) -> Result<GameTypeUser, Error> {
     use db::schema::game_type_users;
-    diesel::insert_into(game_type_users::table)
+    Ok(diesel::insert_into(game_type_users::table)
         .values(gtu)
         .get_result(conn)
-        .chain_err(|| "error inserting new game type user")
+        .context("error inserting new game type user")?)
 }
 
 pub fn player_can_undo_set_undo_game_state(
@@ -481,7 +494,7 @@ pub fn player_can_undo_set_undo_game_state(
     game_player_id: &Uuid,
     game_state: &str,
     conn: &PgConnection,
-) -> Result<()> {
+) -> Result<(), Error> {
     use db::schema::game_players;
     conn.transaction(|| {
         diesel::update(
@@ -490,14 +503,14 @@ pub fn player_can_undo_set_undo_game_state(
                 .filter(game_players::undo_game_state.is_null()),
         ).set(game_players::undo_game_state.eq(game_state))
             .execute(conn)
-            .chain_err(|| "error updating game player undo_game_state to game_state")?;
+            .context("error updating game player undo_game_state to game_state")?;
         diesel::update(
             game_players::table
                 .filter(game_players::game_id.eq(game_id))
                 .filter(game_players::id.ne(game_player_id)),
         ).set(game_players::undo_game_state.eq(None::<String>))
             .execute(conn)
-            .chain_err(|| "error update game players undo_game_state to None")?;
+            .context("error update game players undo_game_state to None")?;
         Ok(())
     })
 }
@@ -505,12 +518,14 @@ pub fn player_can_undo_set_undo_game_state(
 pub fn player_cannot_undo_set_undo_game_state(
     game_id: &Uuid,
     conn: &PgConnection,
-) -> Result<Vec<GamePlayer>> {
+) -> Result<Vec<GamePlayer>, Error> {
     use db::schema::game_players;
-    diesel::update(game_players::table.filter(game_players::game_id.eq(game_id)))
-        .set(game_players::undo_game_state.eq(None::<String>))
-        .get_results(conn)
-        .chain_err(|| "error updating game players undo_game_state to None")
+    Ok(
+        diesel::update(game_players::table.filter(game_players::game_id.eq(game_id)))
+            .set(game_players::undo_game_state.eq(None::<String>))
+            .get_results(conn)
+            .context("error updating game players undo_game_state to None")?,
+    )
 }
 
 
@@ -532,7 +547,7 @@ pub fn update_game_command_success(
     placings: &[usize],
     points: &[f32],
     conn: &PgConnection,
-) -> Result<UpdatedGame> {
+) -> Result<UpdatedGame, Error> {
     conn.transaction(|| {
         if let Some(game_state) = undo_game_state {
             player_can_undo_set_undo_game_state(game_id, game_player_id, game_state, conn)?;
@@ -556,10 +571,10 @@ pub fn concede_game(
     game_id: &Uuid,
     game_player_id: &Uuid,
     conn: &PgConnection,
-) -> Result<UpdatedGame> {
+) -> Result<UpdatedGame, Error> {
     conn.transaction(|| {
         let game_players = find_game_players_by_game(game_id, conn)
-            .chain_err(|| "unable to find game players for concede")?;
+            .context("unable to find game players for concede")?;
         let placings: Vec<usize> = game_players
             .iter()
             .map(|gp| if gp.id != *game_player_id { 1 } else { 2 })
@@ -580,24 +595,24 @@ pub fn update_game_is_finished(
     game_id: &Uuid,
     is_finished: bool,
     conn: &PgConnection,
-) -> Result<Option<Game>> {
+) -> Result<Option<Game>, Error> {
     use db::schema::games;
-    diesel::update(games::table.find(game_id))
+    Ok(diesel::update(games::table.find(game_id))
         .set(games::is_finished.eq(is_finished))
         .get_result(conn)
         .optional()
-        .chain_err(|| "error updating game is_finished")
+        .context("error updating game is_finished")?)
 }
 
-pub fn find_player_count_by_game(game_id: &Uuid, conn: &PgConnection) -> Result<i64> {
+pub fn find_player_count_by_game(game_id: &Uuid, conn: &PgConnection) -> Result<i64, Error> {
     use diesel::dsl::count;
     use db::schema::game_players;
 
-    game_players::table
+    Ok(game_players::table
         .select(count(game_players::id))
         .filter(game_players::game_id.eq(game_id))
         .get_result(conn)
-        .chain_err(|| "error getting player count")
+        .context("error getting player count")?)
 }
 
 fn to_i32_vec(from: &[usize]) -> Vec<i32> {
@@ -608,9 +623,9 @@ pub fn update_game(
     update_id: &Uuid,
     update: &NewGame,
     conn: &PgConnection,
-) -> Result<Option<Game>> {
+) -> Result<Option<Game>, Error> {
     use db::schema::games;
-    diesel::update(games::table.find(update_id))
+    Ok(diesel::update(games::table.find(update_id))
         .set((
             games::game_version_id.eq(update.game_version_id),
             games::is_finished.eq(update.is_finished),
@@ -618,52 +633,52 @@ pub fn update_game(
         ))
         .get_result(conn)
         .optional()
-        .chain_err(|| "error updating game")
+        .context("error updating game")?)
 }
 
 pub fn mark_game_read(
     id: &Uuid,
     user_id: &Uuid,
     conn: &PgConnection,
-) -> Result<Option<GamePlayer>> {
+) -> Result<Option<GamePlayer>, Error> {
     use db::schema::game_players;
-    diesel::update(
+    Ok(diesel::update(
         game_players::table
             .filter(game_players::game_id.eq(id))
             .filter(game_players::user_id.eq(user_id)),
     ).set((game_players::is_read.eq(true),))
         .get_result(conn)
         .optional()
-        .chain_err(|| "error marking game as read")
+        .context("error marking game as read")?)
 }
 
 pub fn update_game_whose_turn(
     id: &Uuid,
     positions: &[usize],
     conn: &PgConnection,
-) -> Result<Vec<GamePlayer>> {
+) -> Result<Vec<GamePlayer>, Error> {
     use db::schema::game_players;
 
-    diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
-        .set(game_players::is_turn.eq(game_players::position.eq_any(to_i32_vec(positions))))
-        .get_results(conn)
-        .chain_err(|| "error updating game players")
+    Ok(
+        diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
+            .set(game_players::is_turn.eq(game_players::position.eq_any(to_i32_vec(positions))))
+            .get_results(conn)
+            .context("error updating game players")?,
+    )
 }
 
 pub fn update_game_points(
     id: &Uuid,
     points: &[f32],
     conn: &PgConnection,
-) -> Result<Vec<GamePlayer>> {
-    Ok(
-        points
-            .iter()
-            .enumerate()
-            .filter_map(|(pos, pts)| {
-                update_game_points_for_position(id, pos as i32, *pts, conn).unwrap()
-            })
-            .collect(),
-    )
+) -> Result<Vec<GamePlayer>, Error> {
+    Ok(points
+        .iter()
+        .enumerate()
+        .filter_map(|(pos, pts)| {
+            update_game_points_for_position(id, pos as i32, *pts, conn).unwrap()
+        })
+        .collect())
 }
 
 pub fn update_game_points_for_position(
@@ -671,43 +686,48 @@ pub fn update_game_points_for_position(
     position: i32,
     points: f32,
     conn: &PgConnection,
-) -> Result<Option<GamePlayer>> {
+) -> Result<Option<GamePlayer>, Error> {
     use db::schema::game_players;
 
-    diesel::update(
+    Ok(diesel::update(
         game_players::table
             .filter(game_players::game_id.eq(id))
             .filter(game_players::position.eq(position)),
     ).set(game_players::points.eq(points))
         .get_result(conn)
         .optional()
-        .chain_err(|| "error updating game player points")
+        .context("error updating game player points")?)
 }
 
 pub fn update_game_eliminated(
     id: &Uuid,
     positions: &[usize],
     conn: &PgConnection,
-) -> Result<Vec<GamePlayer>> {
+) -> Result<Vec<GamePlayer>, Error> {
     use db::schema::game_players;
 
-    diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
-        .set(game_players::is_eliminated.eq(game_players::position.eq_any(to_i32_vec(positions))))
-        .get_results(conn)
-        .chain_err(|| "error updating game players")
+    Ok(
+        diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
+            .set(
+                game_players::is_eliminated
+                    .eq(game_players::position.eq_any(to_i32_vec(positions))),
+            )
+            .get_results(conn)
+            .context("error updating game players")?,
+    )
 }
 
 pub fn update_game_placings(
     game_id: &Uuid,
     placings: &[usize],
     conn: &PgConnection,
-) -> Result<(Vec<GamePlayer>, Vec<GameTypeUser>)> {
+) -> Result<(Vec<GamePlayer>, Vec<GameTypeUser>), Error> {
     let placings: Vec<usize> = placings.to_owned();
 
     conn.transaction(|| {
         let game = find_game(game_id, conn)?;
         let game_version = find_game_version(&game.game_version_id, conn)?
-            .ok_or_else::<Error, _>(|| "could not find game version for game".into())?;
+            .ok_or_else::<Error, _>(|| format_err!("could not find game version for game"))?;
         let game_players = find_game_players_by_game(game_id, conn)?;
         let mut rating_changes: HashMap<usize, i32> = HashMap::new();
 
@@ -735,7 +755,7 @@ pub fn update_game_placings(
                         )?,
                     ))
                 })
-                .collect::<Result<Vec<(&GamePlayer, GameTypeUser)>>>()?;
+                .collect::<Result<Vec<(&GamePlayer, GameTypeUser)>, Error>>()?;
 
             // Iterate and calculate an adjustment against each opponent.
             for (a_index, &(a_gp, ref a_gtu)) in game_player_type_users
@@ -803,14 +823,14 @@ fn update_game_type_user_rating(
     id: &Uuid,
     rating: i32,
     conn: &PgConnection,
-) -> Result<Option<GameTypeUser>> {
+) -> Result<Option<GameTypeUser>, Error> {
     use db::schema::game_type_users;
 
-    diesel::update(game_type_users::table.find(id))
+    Ok(diesel::update(game_type_users::table.find(id))
         .set(game_type_users::rating.eq(rating))
         .get_result(conn)
         .optional()
-        .chain_err(|| "unable to update game type user rating")
+        .context("unable to update game type user rating")?)
 }
 
 const ELO_K: f32 = 32.0;
@@ -835,10 +855,10 @@ pub fn update_game_player_result(
     place: usize,
     rating_change: Option<i32>,
     conn: &PgConnection,
-) -> Result<Option<GamePlayer>> {
+) -> Result<Option<GamePlayer>, Error> {
     use db::schema::game_players;
 
-    diesel::update(
+    Ok(diesel::update(
         game_players::table
             .filter(game_players::game_id.eq(game_id))
             .filter(game_players::position.eq(position as i32)),
@@ -848,27 +868,29 @@ pub fn update_game_player_result(
     ))
         .get_result(conn)
         .optional()
-        .chain_err(|| "error updating place for game player")
+        .context("error updating place for game player")?)
 }
 
 pub fn update_game_is_read(
     id: &Uuid,
     game_player_ids: &[Uuid],
     conn: &PgConnection,
-) -> Result<Vec<GamePlayer>> {
+) -> Result<Vec<GamePlayer>, Error> {
     use db::schema::game_players;
 
-    diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
-        .set(game_players::is_read.eq(game_players::id.eq_any(game_player_ids)))
-        .get_results(conn)
-        .chain_err(|| "error updating game players")
+    Ok(
+        diesel::update(game_players::table.filter(game_players::game_id.eq(id)))
+            .set(game_players::is_read.eq(game_players::id.eq_any(game_player_ids)))
+            .get_results(conn)
+            .context("error updating game players")?,
+    )
 }
 
 pub fn create_game_logs_from_cli(
     game_id: &Uuid,
     logs: Vec<CliLog>,
     conn: &PgConnection,
-) -> Result<Vec<CreatedGameLog>> {
+) -> Result<Vec<CreatedGameLog>, Error> {
     conn.transaction(|| {
         let mut player_id_by_position: HashMap<usize, Uuid> = HashMap::new();
         for p in find_game_players_by_game(game_id, conn)? {
@@ -881,7 +903,9 @@ pub fn create_game_logs_from_cli(
                 player_to.push(
                     player_id_by_position
                         .get(&t)
-                        .ok_or_else::<Error, _>(|| "no player with that position exists".into())?
+                        .ok_or_else::<Error, _>(|| {
+                            format_err!("no player with that position exists")
+                        })?
                         .to_owned(),
                 );
             }
@@ -900,50 +924,53 @@ pub fn create_game_logs_from_cli(
     })
 }
 
-pub fn find_game_players_by_game(game_id: &Uuid, conn: &PgConnection) -> Result<Vec<GamePlayer>> {
+pub fn find_game_players_by_game(
+    game_id: &Uuid,
+    conn: &PgConnection,
+) -> Result<Vec<GamePlayer>, Error> {
     use db::schema::game_players;
 
-    game_players::table
+    Ok(game_players::table
         .filter(game_players::game_id.eq(game_id))
         .order(game_players::position)
         .get_results(conn)
-        .chain_err(|| "error finding players")
+        .context("error finding players")?)
 }
 
 pub fn find_game_player_by_user_and_game(
     user_id: &Uuid,
     game_id: &Uuid,
     conn: &PgConnection,
-) -> Result<Option<GamePlayer>> {
+) -> Result<Option<GamePlayer>, Error> {
     use db::schema::game_players;
 
-    game_players::table
+    Ok(game_players::table
         .filter(game_players::user_id.eq(user_id))
         .filter(game_players::game_id.eq(game_id))
         .order(game_players::position)
         .get_result(conn)
         .optional()
-        .chain_err(|| "error finding player")
+        .context("error finding player")?)
 }
 
 pub fn find_game_player_type_users_by_game(
     game_id: &Uuid,
     conn: &PgConnection,
-) -> Result<Vec<GamePlayerTypeUser>> {
+) -> Result<Vec<GamePlayerTypeUser>, Error> {
     use db::schema::{game_players, game_versions, games, users};
 
     let (game_version, _) = game_versions::table
         .inner_join(games::table)
         .filter(games::id.eq(game_id))
         .get_result::<(GameVersion, Game)>(conn)
-        .chain_err(|| "error finding game version")?;
+        .context("error finding game version")?;
 
     game_players::table
         .filter(game_players::game_id.eq(game_id))
         .order(game_players::position)
         .inner_join(users::table)
         .get_results::<(GamePlayer, User)>(conn)
-        .chain_err(|| "error finding game players")?
+        .context("error finding game players")?
         .into_iter()
         .map(|(gp, u)| {
             let gtu = find_or_create_game_type_user(&game_version.game_type_id, &u.id, conn)?;
@@ -959,15 +986,15 @@ pub fn find_game_player_type_users_by_game(
 pub fn find_game_players_with_user_by_game(
     game_id: &Uuid,
     conn: &PgConnection,
-) -> Result<Vec<(GamePlayer, User)>> {
+) -> Result<Vec<(GamePlayer, User)>, Error> {
     use db::schema::{game_players, users};
 
-    game_players::table
+    Ok(game_players::table
         .filter(game_players::game_id.eq(game_id))
         .order(game_players::position)
         .inner_join(users::table)
         .get_results(conn)
-        .chain_err(|| "error finding game players")
+        .context("error finding game players")?)
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -979,7 +1006,7 @@ pub fn create_game_log(
     log: &NewGameLog,
     to: &[Uuid],
     conn: &PgConnection,
-) -> Result<CreatedGameLog> {
+) -> Result<CreatedGameLog, Error> {
     use db::schema::game_logs;
     conn.transaction(|| {
         let created_log: GameLog = diesel::insert_into(game_logs::table)
@@ -997,7 +1024,7 @@ pub fn create_game_log_targets(
     log_id: &Uuid,
     player_ids: &[Uuid],
     conn: &PgConnection,
-) -> Result<Vec<GameLogTarget>> {
+) -> Result<Vec<GameLogTarget>, Error> {
     conn.transaction(|| {
         let mut created = vec![];
         for id in player_ids {
@@ -1016,25 +1043,25 @@ pub fn create_game_log_targets(
 pub fn create_game_log_target(
     new_target: &NewGameLogTarget,
     conn: &PgConnection,
-) -> Result<GameLogTarget> {
+) -> Result<GameLogTarget, Error> {
     use db::schema::game_log_targets;
 
-    diesel::insert_into(game_log_targets::table)
+    Ok(diesel::insert_into(game_log_targets::table)
         .values(new_target)
         .get_result(conn)
-        .chain_err(|| "error inserting game log target")
+        .context("error inserting game log target")?)
 }
 
 pub fn create_game_users(
     ids: &[Uuid],
     emails: &[String],
     conn: &PgConnection,
-) -> Result<Vec<(UserEmail, User)>> {
+) -> Result<Vec<(UserEmail, User)>, Error> {
     conn.transaction(|| {
         let mut users: Vec<(UserEmail, User)> = vec![];
         for id in ids.iter() {
             users.push(find_user_with_primary_email(id, conn)?
-                .ok_or_else::<Error, _>(|| "unable to find user".into())?);
+                .ok_or_else::<Error, _>(|| format_err!("unable to find user"))?);
         }
         for email in emails.iter() {
             users.push(match find_user_with_primary_email_by_email(email, conn)? {
@@ -1049,22 +1076,22 @@ pub fn create_game_users(
 pub fn find_user_with_primary_email(
     find_user_id: &Uuid,
     conn: &PgConnection,
-) -> Result<Option<(UserEmail, User)>> {
+) -> Result<Option<(UserEmail, User)>, Error> {
     use db::schema::{user_emails, users};
 
-    user_emails::table
+    Ok(user_emails::table
         .filter(user_emails::user_id.eq(find_user_id))
         .filter(user_emails::is_primary.eq(true))
         .inner_join(users::table)
         .first(conn)
         .optional()
-        .chain_err(|| "error finding user")
+        .context("error finding user")?)
 }
 
 pub fn find_user_with_primary_email_by_email(
     search_email: &str,
     conn: &PgConnection,
-) -> Result<Option<(UserEmail, User)>> {
+) -> Result<Option<(UserEmail, User)>, Error> {
     use db::schema::{user_emails, users};
 
     Ok(match user_emails::table
@@ -1081,40 +1108,43 @@ pub fn find_user_with_primary_email_by_email(
     })
 }
 
-pub fn create_game(new_game: &NewGame, conn: &PgConnection) -> Result<Game> {
+pub fn create_game(new_game: &NewGame, conn: &PgConnection) -> Result<Game, Error> {
     use db::schema::games;
 
-    diesel::insert_into(games::table)
+    Ok(diesel::insert_into(games::table)
         .values(new_game)
         .get_result(conn)
-        .chain_err(|| "error inserting game")
+        .context("error inserting game")?)
 }
 
 pub fn create_game_version(
     new_game_version: &NewGameVersion,
     conn: &PgConnection,
-) -> Result<GameVersion> {
+) -> Result<GameVersion, Error> {
     use db::schema::game_versions;
 
-    diesel::insert_into(game_versions::table)
+    Ok(diesel::insert_into(game_versions::table)
         .values(new_game_version)
         .get_result(conn)
-        .chain_err(|| "error inserting game version")
+        .context("error inserting game version")?)
 }
 
-pub fn create_game_type(new_game_type: &NewGameType, conn: &PgConnection) -> Result<GameType> {
+pub fn create_game_type(
+    new_game_type: &NewGameType,
+    conn: &PgConnection,
+) -> Result<GameType, Error> {
     use db::schema::game_types;
 
-    diesel::insert_into(game_types::table)
+    Ok(diesel::insert_into(game_types::table)
         .values(new_game_type)
         .get_result(conn)
-        .chain_err(|| "error inserting game type")
+        .context("error inserting game type")?)
 }
 
 pub fn create_game_players(
     players: &[NewGamePlayer],
     conn: &PgConnection,
-) -> Result<Vec<GamePlayer>> {
+) -> Result<Vec<GamePlayer>, Error> {
     conn.transaction(|| {
         let mut created: Vec<GamePlayer> = vec![];
         for p in players.iter() {
@@ -1124,70 +1154,72 @@ pub fn create_game_players(
     })
 }
 
-pub fn create_game_player(player: &NewGamePlayer, conn: &PgConnection) -> Result<GamePlayer> {
+pub fn create_game_player(
+    player: &NewGamePlayer,
+    conn: &PgConnection,
+) -> Result<GamePlayer, Error> {
     use db::schema::game_players;
 
-    diesel::insert_into(game_players::table)
+    Ok(diesel::insert_into(game_players::table)
         .values(player)
         .get_result(conn)
-        .chain_err(|| "error inserting game player")
+        .context("error inserting game player")?)
 }
 
-pub fn public_game_versions(conn: &PgConnection) -> Result<Vec<GameVersionType>> {
+pub fn public_game_versions(conn: &PgConnection) -> Result<Vec<GameVersionType>, Error> {
     use db::schema::{game_types, game_versions};
 
-    Ok(
-        game_versions::table
-            .filter(game_versions::is_public.eq(true))
-            .filter(game_versions::is_deprecated.eq(false))
-            .inner_join(game_types::table)
-            .get_results::<(GameVersion, GameType)>(conn)
-            .chain_err(|| "error finding game versions")?
-            .into_iter()
-            .map(|(game_version, game_type)| {
-                GameVersionType {
-                    game_version,
-                    game_type,
-                }
-            })
-            .collect(),
-    )
+    Ok(game_versions::table
+        .filter(game_versions::is_public.eq(true))
+        .filter(game_versions::is_deprecated.eq(false))
+        .inner_join(game_types::table)
+        .get_results::<(GameVersion, GameType)>(conn)
+        .context("error finding game versions")?
+        .into_iter()
+        .map(|(game_version, game_type)| {
+            GameVersionType {
+                game_version,
+                game_type,
+            }
+        })
+        .collect())
 }
 
-pub fn find_public_game_logs_for_game(game_id: &Uuid, conn: &PgConnection) -> Result<Vec<GameLog>> {
+pub fn find_public_game_logs_for_game(
+    game_id: &Uuid,
+    conn: &PgConnection,
+) -> Result<Vec<GameLog>, Error> {
     use db::schema::game_logs;
 
-    game_logs::table
+    Ok(game_logs::table
         .filter(game_logs::game_id.eq(game_id))
         .filter(game_logs::is_public.eq(true))
         .order(game_logs::logged_at)
         .get_results(conn)
-        .chain_err(|| "error finding game logs")
+        .context("error finding game logs")?)
 }
 
 pub fn find_game_logs_for_player(
     game_player_id: &Uuid,
     conn: &PgConnection,
-) -> Result<Vec<GameLog>> {
+) -> Result<Vec<GameLog>, Error> {
     use db::schema::{game_log_targets, game_logs, game_players};
 
     let game_player: GamePlayer = game_players::table.find(game_player_id).get_result(conn)?;
-    Ok(
-        game_logs::table
-            .left_outer_join(game_log_targets::table)
-            .filter(game_logs::game_id.eq(game_player.game_id))
-            .filter(
-                game_logs::is_public
-                    .eq(true)
-                    .or(game_log_targets::game_player_id.eq(game_player_id)),
-            )
-            .order(game_logs::logged_at)
-            .get_results::<(GameLog, Option<GameLogTarget>)>(conn)
-            .chain_err(|| "error finding game logs")?
-            .iter()
-            .map(|&(ref gl, _)| gl.clone())
-            .collect(),
-    )
+    Ok(game_logs::table
+        .left_outer_join(game_log_targets::table)
+        .filter(game_logs::game_id.eq(game_player.game_id))
+        .filter(
+            game_logs::is_public
+                .eq(true)
+                .or(game_log_targets::game_player_id.eq(game_player_id)),
+        )
+        .order(game_logs::logged_at)
+        .get_results::<(GameLog, Option<GameLogTarget>)>(conn)
+        .context("error finding game logs")?
+        .iter()
+        .map(|&(ref gl, _)| gl.clone())
+        .collect())
 }
 
 #[cfg(test)]

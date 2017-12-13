@@ -1,3 +1,5 @@
+use failure::{Error, ResultExt};
+
 pub mod query;
 pub mod models;
 pub mod color;
@@ -7,7 +9,6 @@ pub mod schema;
 //use r2d2_diesel::ConnectionManager;
 use diesel::pg::PgConnection;
 use std::env;
-use errors::*;
 
 lazy_static! {
     pub static ref CONN: Connections = Connections {
@@ -19,12 +20,12 @@ lazy_static! {
 pub struct Connection {}
 
 impl Connection {
-    pub fn get(&self) -> Result<Box<PgConnection>> {
+    pub fn get(&self) -> Result<Box<PgConnection>, Error> {
         use diesel::Connection;
-        Ok(Box::new(PgConnection::establish(&env::var("DATABASE_URL")
-            .chain_err(|| "DATABASE_URL not set")?).chain_err(
-            || "Unable to connect to database",
-        )?))
+        Ok(Box::new(
+            PgConnection::establish(&env::var("DATABASE_URL").context("DATABASE_URL not set")?)
+                .context("Unable to connect to database")?,
+        ))
     }
 }
 
@@ -42,24 +43,24 @@ pub struct Connections {
     pub r: r2d2::Pool<ConnectionManager<PgConnection>>,
 }
 
-pub fn connect(w_addr: &str, r_addr: &str) -> Result<Connections> {
+pub fn connect(w_addr: &str, r_addr: &str) -> Result<Connections, Error> {
     Ok(Connections {
            w: conn(w_addr)?,
            r: conn(r_addr)?,
        })
 }
 
-pub fn connect_env() -> Result<Connections> {
+pub fn connect_env() -> Result<Connections, Error> {
     let w_addr = env::var("DATABASE_URL")
-        .chain_err(|| "DATABASE_URL not set")?;
+        .context("DATABASE_URL not set")?;
     connect(&w_addr,
             &env::var("DATABASE_URL_R").unwrap_or_else(|_| w_addr.to_owned()))
 }
 
 fn conn(addr: &str)
-        -> Result<r2d2::Pool<ConnectionManager<PgConnection>>> {
+        -> Result<r2d2::Pool<ConnectionManager<PgConnection>>, Error> {
     r2d2::Pool::new(r2d2::Config::default(),
                     ConnectionManager::<PgConnection>::new(addr))
-            .chain_err(|| "unable to connect to database")
+            .context("unable to connect to database")
 }
 */

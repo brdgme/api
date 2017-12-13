@@ -1,6 +1,6 @@
-use std::env;
+use failure::{Error, ResultExt};
 
-use errors::*;
+use std::env;
 
 lazy_static! {
   pub static ref CONFIG: Config = from_env().unwrap();
@@ -16,11 +16,11 @@ pub enum Mail {
 }
 
 impl Mail {
-    fn smtp_from_env() -> Result<Self> {
+    fn smtp_from_env() -> Result<Self, Error> {
         Ok(Mail::Smtp {
-            addr: env::var("SMTP_ADDR").chain_err(|| "SMTP_ADDR must be set")?,
-            user: env::var("SMTP_USER").chain_err(|| "SMTP_USER must be set")?,
-            pass: env::var("SMTP_PASS").chain_err(|| "SMTP_PASS must be set")?,
+            addr: env::var("SMTP_ADDR").context("SMTP_ADDR must be set")?,
+            user: env::var("SMTP_USER").context("SMTP_USER must be set")?,
+            pass: env::var("SMTP_PASS").context("SMTP_PASS must be set")?,
         })
     }
 
@@ -37,10 +37,9 @@ pub struct Config {
     pub mail_from: String,
 }
 
-fn from_env() -> Result<Config> {
+fn from_env() -> Result<Config, Error> {
     Ok(Config {
-        database_url: env::var("DATABASE_URL")
-            .chain_err(|| "DATABASE_URL must be set")?,
+        database_url: env::var("DATABASE_URL").context("DATABASE_URL must be set")?,
         database_url_r: env::var("DATABASE_URL_R").ok(),
         redis_url: env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1/".to_string()),
         mail: Mail::from_env(),

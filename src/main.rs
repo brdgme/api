@@ -11,7 +11,7 @@ extern crate diesel;
 extern crate email;
 extern crate env_logger;
 #[macro_use]
-extern crate error_chain;
+extern crate failure;
 extern crate hyper;
 extern crate hyper_rustls;
 #[macro_use]

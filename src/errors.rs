@@ -1,68 +1,72 @@
 use rocket::request::Request;
 use rocket::response::{self, Responder, Response};
-use rocket::http::{Status, ContentType};
-use rocket::http::hyper::header::{AccessControlAllowOrigin, AccessControlAllowMethods,
-                                  AccessControlAllowHeaders, AccessControlAllowCredentials};
+use rocket::http::{ContentType, Status};
+use rocket::http::hyper::header::{AccessControlAllowCredentials, AccessControlAllowHeaders,
+                                  AccessControlAllowMethods, AccessControlAllowOrigin};
 use hyper::method::Method;
 use unicase::UniCase;
+use failure::{Context, Error};
+use diesel;
 
 use std::io::Cursor;
 
-error_chain!{
-    links {
-        Markup(::brdgme_markup::errors::Error, ::brdgme_markup::errors::ErrorKind);
-    }
+#[derive(Fail, Debug)]
+pub enum ControllerError {
+    #[fail(display = "Bad request: {}", message)] BadRequest { message: String },
+    #[fail(display = "Internal error: {}", inner)] Internal { inner: Error },
+}
 
-    foreign_links {
-        Io(::std::io::Error);
-        EnvVar(::std::env::VarError);
-        Chrono(::chrono::ParseError);
-        Diesel(::diesel::result::Error);
-        Redis(::redis::RedisError);
-        Json(::serde_json::Error);
-    }
-
-    errors {
-        UserError(message: String) {
-            description("user error")
-            display("{}", message)
+impl ControllerError {
+    pub fn bad_request<T: Into<String>>(message: T) -> Self {
+        ControllerError::BadRequest {
+            message: message.into(),
         }
     }
 }
 
-impl<'r> Responder<'r> for Error {
+impl From<Error> for ControllerError {
+    fn from(error: Error) -> Self {
+        ControllerError::Internal { inner: error }
+    }
+}
+
+impl<'a> From<Context<&'a str>> for ControllerError {
+    fn from(error: Context<&str>) -> Self {
+        let err: Error = error.into();
+        err.into()
+    }
+}
+
+impl From<diesel::result::Error> for ControllerError {
+    fn from(error: diesel::result::Error) -> Self {
+        let err: Error = error.into();
+        err.into()
+    }
+}
+
+impl<'r> Responder<'r> for ControllerError {
     fn respond_to(self, _: &Request) -> response::Result<'r> {
         match self {
-            Error(ErrorKind::UserError(ref message), _) => {
-                Ok(
-                    Response::build()
-                        .status(Status::BadRequest)
-                        .header(ContentType::Plain)
-                        .header(AccessControlAllowOrigin::Any)
-                        .header(AccessControlAllowMethods(vec![
-                            Method::Get,
-                            Method::Post,
-                            Method::Put,
-                            Method::Delete,
-                            Method::Options,
-                        ]))
-                        .header(AccessControlAllowHeaders(vec![
-                            UniCase("Authorization".to_string()),
-                            UniCase("Content-Type".to_string()),
-                        ]))
-                        .header(AccessControlAllowCredentials)
-                        .sized_body(Cursor::new(message.to_owned()))
-                        .finalize(),
-                )
-            }
-            _ => {
-                error!("error: {}", self);
-                for e in self.iter().skip(1) {
-                    error!("caused by: {}", e);
-                }
-                if let Some(backtrace) = self.backtrace() {
-                    error!("backtrace: {:?}", backtrace);
-                }
+            ControllerError::BadRequest { ref message } => Ok(Response::build()
+                .status(Status::BadRequest)
+                .header(ContentType::Plain)
+                .header(AccessControlAllowOrigin::Any)
+                .header(AccessControlAllowMethods(vec![
+                    Method::Get,
+                    Method::Post,
+                    Method::Put,
+                    Method::Delete,
+                    Method::Options,
+                ]))
+                .header(AccessControlAllowHeaders(vec![
+                    UniCase("Authorization".to_string()),
+                    UniCase("Content-Type".to_string()),
+                ]))
+                .header(AccessControlAllowCredentials)
+                .sized_body(Cursor::new(message.to_owned()))
+                .finalize()),
+            ControllerError::Internal { inner } => {
+                error!("{}, {}", inner.cause(), inner.backtrace());
                 Err(Status::InternalServerError)
             }
         }

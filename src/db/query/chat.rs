@@ -3,27 +3,31 @@ use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use uuid::Uuid;
 use chrono::{NaiveDateTime, Utc};
+use failure::{Error, ResultExt};
 
-use errors::*;
 use db::models::*;
 
-pub fn create(conn: &PgConnection) -> Result<Chat> {
+pub fn create(conn: &PgConnection) -> Result<Chat, Error> {
     use db::schema::chats;
 
-    diesel::insert_into(chats::table)
+    Ok(diesel::insert_into(chats::table)
         .values(&NewChat { id: None })
         .get_result(conn)
-        .chain_err(|| "error creating chat")
+        .context("error creating chat")?)
 }
 
-pub fn add_users(chat_id: Uuid, user_ids: &[Uuid], conn: &PgConnection) -> Result<Vec<ChatUser>> {
+pub fn add_users(
+    chat_id: Uuid,
+    user_ids: &[Uuid],
+    conn: &PgConnection,
+) -> Result<Vec<ChatUser>, Error> {
     use db::schema::chat_users;
 
     if user_ids.is_empty() {
         return Ok(vec![]);
     }
 
-    diesel::insert_into(chat_users::table)
+    Ok(diesel::insert_into(chat_users::table)
         .values(&user_ids
             .iter()
             .map(|&user_id| {
@@ -35,72 +39,75 @@ pub fn add_users(chat_id: Uuid, user_ids: &[Uuid], conn: &PgConnection) -> Resul
             })
             .collect::<Vec<NewChatUser>>())
         .get_results(conn)
-        .chain_err(|| "error adding users to chat")
+        .context("error adding users to chat")?)
 }
 
 pub fn create_message(
     chat_user_id: Uuid,
     message: &str,
     conn: &PgConnection,
-) -> Result<ChatMessage> {
+) -> Result<ChatMessage, Error> {
     use db::schema::chat_messages;
 
-    diesel::insert_into(chat_messages::table)
+    Ok(diesel::insert_into(chat_messages::table)
         .values(&NewChatMessage {
             chat_user_id,
             message,
         })
         .get_result(conn)
-        .chain_err(|| "error creating chat message")
+        .context("error creating chat message")?)
 }
 
-pub fn find(id: &Uuid, conn: &PgConnection) -> Result<Chat> {
+pub fn find(id: &Uuid, conn: &PgConnection) -> Result<Chat, Error> {
     use db::schema::chats;
 
-    chats::table
+    Ok(chats::table
         .find(id)
         .get_result(conn)
-        .chain_err(|| "error finding chat")
+        .context("error finding chat")?)
 }
 
-pub fn find_users_by_chat(chat_id: &Uuid, conn: &PgConnection) -> Result<Vec<ChatUser>> {
+pub fn find_users_by_chat(chat_id: &Uuid, conn: &PgConnection) -> Result<Vec<ChatUser>, Error> {
     use db::schema::chat_users;
 
-    chat_users::table
+    Ok(chat_users::table
         .filter(chat_users::chat_id.eq(chat_id))
         .get_results(conn)
-        .chain_err(|| "error finding chat users for chat")
+        .context("error finding chat users for chat")?)
 }
 
-pub fn find_messages_by_chat(chat_id: &Uuid, conn: &PgConnection) -> Result<Vec<ChatMessage>> {
+pub fn find_messages_by_chat(
+    chat_id: &Uuid,
+    conn: &PgConnection,
+) -> Result<Vec<ChatMessage>, Error> {
     use db::schema::{chat_messages, chat_users};
 
-    chat_messages::table
+    Ok(chat_messages::table
         .inner_join(chat_users::table)
         .filter(chat_users::chat_id.eq(chat_id))
         .get_results::<(ChatMessage, ChatUser)>(conn)
         .map(|rows| rows.into_iter().map(|row| row.0).collect())
-        .chain_err(|| "error finding chat users for chat")
+        .context("error finding chat users for chat")?)
 }
 
 pub fn update_user_last_read_at(
     chat_user_id: &Uuid,
     at: NaiveDateTime,
     conn: &PgConnection,
-) -> Result<Option<ChatUser>> {
+) -> Result<Option<ChatUser>, Error> {
     use db::schema::chat_users;
 
-    diesel::update(chat_users::table.find(chat_user_id))
+    Ok(diesel::update(chat_users::table.find(chat_user_id))
         .set(chat_users::last_read_at.eq(at))
         .get_result(conn)
         .optional()
-        .chain_err(|| "error updating chat user last read at")
+        .context("error updating chat user last read at")?)
 }
 
 pub fn update_user_last_read_at_now(
     chat_user_id: &Uuid,
     conn: &PgConnection,
-) -> Result<Option<ChatUser>> {
+) -> Result<Option<ChatUser>, Error> {
     update_user_last_read_at(chat_user_id, Utc::now().naive_utc(), conn)
 }
 
@@ -128,7 +135,7 @@ pub struct PublicChatExtended {
     pub chat_messages: Vec<PublicChatMessage>,
 }
 
-pub fn find_extended(id: &Uuid, conn: &PgConnection) -> Result<ChatExtended> {
+pub fn find_extended(id: &Uuid, conn: &PgConnection) -> Result<ChatExtended, Error> {
     Ok(ChatExtended {
         chat: find(id, conn)?,
         chat_users: find_users_by_chat(id, conn)?,
