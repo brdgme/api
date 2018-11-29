@@ -1,26 +1,25 @@
 use hyper::{self, Client as HttpClient};
-use hyper::net::HttpsConnector;
-use hyper_rustls::TlsClient;
+use hyper_tls::HttpsConnector;
 use serde_json;
 use failure::{Error, ResultExt};
 
-use brdgme_cmd::cli;
+use brdgme_cmd::api;
 use brdgme_game::command::Spec as CommandSpec;
 
-pub fn request(uri: &str, request: &cli::Request) -> Result<cli::Response, Error> {
-    let connector = HttpsConnector::new(TlsClient::new());
+pub fn request(uri: &str, request: &api::Request) -> Result<api::Response, Error> {
+    let connector = HttpsConnector::new(4).unwrap();
     let https = HttpClient::with_connector(connector);
     let res = https
         .post(uri)
         .body(&serde_json::to_string(request).context("error converting request to JSON")?)
         .send()
         .context("error getting new game state")?;
-    if res.status != hyper::Ok {
+    if res.status != hyper::StatusCode::OK {
         bail!("game request failed");
     }
-    match serde_json::from_reader::<_, cli::Response>(res).context("error parsing JSON response")? {
-        //cli::Response::UserError { message } => Err(ErrorKind::UserError(message).into()),
-        cli::Response::SystemError { message } => Err(format_err!("{}", message)),
+    match serde_json::from_reader::<_, api::Response>(res).context("error parsing JSON response")? {
+        //api::Response::UserError { message } => Err(ErrorKind::UserError(message).into()),
+        api::Response::SystemError { message } => Err(format_err!("{}", message)),
         default => Ok(default),
     }
 }
@@ -32,8 +31,8 @@ pub struct RenderResponse {
     pub command_spec: Option<CommandSpec>,
 }
 
-impl From<cli::PubRender> for RenderResponse {
-    fn from(render: cli::PubRender) -> Self {
+impl From<api::PubRender> for RenderResponse {
+    fn from(render: api::PubRender) -> Self {
         Self {
             render: render.render,
             state: render.pub_state,
@@ -42,8 +41,8 @@ impl From<cli::PubRender> for RenderResponse {
     }
 }
 
-impl From<cli::PlayerRender> for RenderResponse {
-    fn from(render: cli::PlayerRender) -> Self {
+impl From<api::PlayerRender> for RenderResponse {
+    fn from(render: api::PlayerRender) -> Self {
         Self {
             render: render.render,
             state: render.player_state,
@@ -60,15 +59,15 @@ pub fn render(uri: &str, game: String, player: Option<usize>) -> Result<RenderRe
 }
 
 pub fn pub_render(uri: &str, game: String) -> Result<RenderResponse, Error> {
-    request(uri, &cli::Request::PubRender { game }).and_then(|resp| match resp {
-        cli::Response::PubRender { render } => Ok(render.into()),
+    request(uri, &api::Request::PubRender { game }).and_then(|resp| match resp {
+        api::Response::PubRender { render } => Ok(render.into()),
         _ => Err(format_err!("invalid response type")),
     })
 }
 
 pub fn player_render(uri: &str, game: String, player: usize) -> Result<RenderResponse, Error> {
-    request(uri, &cli::Request::PlayerRender { player, game }).and_then(|resp| match resp {
-        cli::Response::PlayerRender { render } => Ok(render.into()),
+    request(uri, &api::Request::PlayerRender { player, game }).and_then(|resp| match resp {
+        api::Response::PlayerRender { render } => Ok(render.into()),
         _ => Err(format_err!("invalid response type")),
     })
 }

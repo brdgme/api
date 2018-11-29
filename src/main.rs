@@ -2,8 +2,11 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![feature(plugin)]
-#![plugin(rocket_codegen)]
 #![feature(custom_derive)]
+#![feature(custom_attribute)]
+#![feature(proc_macro_hygiene)]
+#![feature(decl_macro)]
+#![allow(proc_macro_derive_resolution_fallback)]
 
 extern crate chrono;
 #[macro_use]
@@ -13,16 +16,18 @@ extern crate env_logger;
 #[macro_use]
 extern crate failure;
 extern crate hyper;
-extern crate hyper_rustls;
+extern crate hyper_tls;
 #[macro_use]
 extern crate lazy_static;
 extern crate lettre;
+extern crate lettre_email;
 #[macro_use]
 extern crate log;
 extern crate r2d2;
 extern crate r2d2_diesel;
 extern crate rand;
 extern crate redis;
+#[macro_use]
 extern crate rocket;
 extern crate rocket_contrib;
 extern crate serde;

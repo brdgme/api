@@ -6,7 +6,7 @@ use rand::{self, Rng};
 use chrono::{Duration, Utc};
 use failure::{Error, ResultExt};
 
-use brdgme_cmd::cli::CliLog;
+use brdgme_cmd::api::CliLog;
 
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;

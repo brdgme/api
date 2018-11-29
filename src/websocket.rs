@@ -3,7 +3,7 @@ use serde_json;
 use uuid::Uuid;
 use failure::{Error, ResultExt};
 
-use brdgme_cmd::cli;
+use brdgme_cmd::api;
 use brdgme_markup as markup;
 
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -127,8 +127,8 @@ pub fn enqueue_game_restarted(
 pub fn enqueue_game_update<'a>(
     game: &'a PublicGameExtended,
     game_logs: &[CreatedGameLog],
-    public_render: &cli::PubRender,
-    player_renders: &[cli::PlayerRender],
+    public_render: &api::PubRender,
+    player_renders: &[api::PlayerRender],
     user_auth_tokens: &[UserAuthToken],
     pub_queue_tx: &Sender<Message>,
 ) -> Result<(), Error> {

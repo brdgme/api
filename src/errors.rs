@@ -3,7 +3,7 @@ use rocket::response::{self, Responder, Response};
 use rocket::http::{ContentType, Status};
 use rocket::http::hyper::header::{AccessControlAllowCredentials, AccessControlAllowHeaders,
                                   AccessControlAllowMethods, AccessControlAllowOrigin};
-use hyper::method::Method;
+use hyper::Method;
 use unicase::UniCase;
 use failure::{Context, Error};
 use diesel;
@@ -59,8 +59,8 @@ impl<'r> Responder<'r> for ControllerError {
                     Method::Options,
                 ]))
                 .header(AccessControlAllowHeaders(vec![
-                    UniCase("Authorization".to_string()),
-                    UniCase("Content-Type".to_string()),
+                    UniCase::new("Authorization".to_string()),
+                    UniCase::new("Content-Type".to_string()),
                 ]))
                 .header(AccessControlAllowCredentials)
                 .sized_body(Cursor::new(message.to_owned()))

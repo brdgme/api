@@ -1,9 +1,9 @@
 use rocket::request::{self, FromRequest, Request};
-use rocket_contrib::Json;
+use rocket_contrib::json::Json;
 use rocket::http::Status;
 use rocket::http::hyper::header::Basic;
 use rocket::Outcome;
-use lettre::email::EmailBuilder;
+use lettre_email::EmailBuilder;
 use uuid::Uuid;
 use failure::{Error, ResultExt};
 

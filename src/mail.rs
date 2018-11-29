@@ -1,15 +1,21 @@
 use email::MimeMessage;
-use lettre::email::SendableEmail;
-use lettre::transport::EmailTransport;
-use lettre::transport::file::FileEmailTransport;
-use lettre::transport::smtp::{SmtpTransportBuilder, SUBMISSION_PORT};
+use lettre::{
+    SendableEmail,
+    EmailTransport,
+    FileEmailTransport,
+};
+use lettre::smtp::{
+    SmtpTransportBuilder,
+    SUBMISSION_PORT,
+};
 use failure::{Error, ResultExt};
 
 use std::env::temp_dir;
+use std::io::Read;
 
 use config::{Mail, CONFIG};
 
-pub fn send<T: SendableEmail>(email: T) -> Result<(), Error> {
+pub fn send<'a, U: Read + 'a, T: SendableEmail<'a, U>>(email: T) -> Result<(), Error> {
     match CONFIG.mail {
         Mail::File => Ok(FileEmailTransport::new(temp_dir())
             .send(email)

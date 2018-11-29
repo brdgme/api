@@ -1,12 +1,12 @@
 use rocket::State;
-use rocket_contrib::Json;
+use rocket_contrib::json::Json;
 use uuid::Uuid;
 use diesel::Connection;
 use diesel::pg::PgConnection;
 use chrono::Utc;
 use failure::{Error, ResultExt};
 
-use brdgme_cmd::cli;
+use brdgme_cmd::api;
 use brdgme_game::{Stat, Status};
 use brdgme_game::command::Spec as CommandSpec;
 use brdgme_markup as markup;
@@ -52,18 +52,18 @@ pub fn create(
 
             let resp = game_client::request(
                 &game_version.uri,
-                &cli::Request::New {
+                &api::Request::New {
                     players: player_count,
                 },
             )?;
             let (game_info, logs, public_render, player_renders) = match resp {
-                cli::Response::New {
+                api::Response::New {
                     game,
                     logs,
                     public_render,
                     player_renders,
                 } => (game, logs, public_render, player_renders),
-                _ => bail!("expected cli::Response::New"),
+                _ => bail!("expected api::Response::New"),
             };
             let status = game_status_values(&game_info.status);
             let created_game = query::create_game_with_users(
@@ -276,14 +276,14 @@ pub fn command(
         let (game_response, logs, can_undo, remaining_command, public_render, player_renders) =
             match game_client::request(
                 &game_version.uri,
-                &cli::Request::Play {
+                &api::Request::Play {
                     player: position as usize,
                     game: game.game_state.clone(),
                     command: data.command.to_owned(),
                     names: names,
                 },
             )? {
-                cli::Response::Play {
+                api::Response::Play {
                     game,
                     logs,
                     can_undo,
@@ -298,7 +298,7 @@ pub fn command(
                     public_render,
                     player_renders,
                 ),
-                cli::Response::UserError { message } => {
+                api::Response::UserError { message } => {
                     return Err(ControllerError::bad_request(message))
                 }
                 _ => Err(format_err!("invalid response type"))?,
@@ -402,11 +402,11 @@ pub fn undo(
 
         let (game_response, public_render, player_renders) = match game_client::request(
             &game_version.uri,
-            &cli::Request::Status {
+            &api::Request::Status {
                 game: undo_state.clone(),
             },
         )? {
-            cli::Response::Status {
+            api::Response::Status {
                 game,
                 public_render,
                 player_renders,
@@ -533,11 +533,11 @@ pub fn concede(
 
         let (public_render, player_renders) = match game_client::request(
             &game_version.uri,
-            &cli::Request::Status {
+            &api::Request::Status {
                 game: game.game_state.clone(),
             },
         )? {
-            cli::Response::Status {
+            api::Response::Status {
                 public_render,
                 player_renders,
                 ..
@@ -629,18 +629,18 @@ pub fn restart(
 
             let resp = game_client::request(
                 &game_extended.game_version.uri,
-                &cli::Request::New {
+                &api::Request::New {
                     players: player_count,
                 },
             )?;
             let (game_info, logs, public_render, player_renders) = match resp {
-                cli::Response::New {
+                api::Response::New {
                     game,
                     logs,
                     public_render,
                     player_renders,
                 } => (game, logs, public_render, player_renders),
-                _ => bail!("expected cli::Response::New"),
+                _ => bail!("expected api::Response::New"),
             };
             let status = game_status_values(&game_info.status);
             let created_game = query::create_game_with_users(

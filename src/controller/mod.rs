@@ -3,8 +3,8 @@ use rocket::response::{self, Responder};
 use rocket::http::RawStr;
 use rocket::http::hyper::header::{AccessControlAllowCredentials, AccessControlAllowHeaders,
                                   AccessControlAllowMethods, AccessControlAllowOrigin};
-use rocket_contrib::Json;
-use hyper::method::Method;
+use rocket_contrib::json::Json;
+use hyper::Method;
 use uuid::Uuid;
 use unicase::UniCase;
 use failure::{Error, ResultExt};
@@ -49,8 +49,8 @@ impl<'r, R: Responder<'r>> Responder<'r> for CORS<R> {
             Method::Options,
         ]));
         response.set_header(AccessControlAllowHeaders(vec![
-            UniCase("Authorization".to_string()),
-            UniCase("Content-Type".to_string()),
+            UniCase::new("Authorization".to_string()),
+            UniCase::new("Content-Type".to_string()),
         ]));
         response.set_header(AccessControlAllowCredentials);
         Ok(response)
